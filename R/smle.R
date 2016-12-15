@@ -1,0 +1,226 @@
+#' Performs efficient semiparametric estimation for regression models under general two-phase designs.
+#'
+#' @param Y Specifies the column of the outcome. Subjects with missing values of \code{Y} are omitted from the analysis. This option is required.
+#' @param X Specifies the columns of expensive covariates. Subjects with missing values of \code{X} are considered as those not selected in the second phase. This argument is required.
+#' @param Z Specifies the columns of the inexpensive covariates that are potentially correlated with \code{X}. Subjects with missing values of \code{Z} are omitted from the analysis. This argument is optional.
+#' @param W Specifies the columns of the inexpensive covariates that are independent of \code{X} given \code{Z}. Subjects with missing values of \code{W} are omitted from the analysis. This argument is optional.
+#' @param Bspline_Z Specifies the columns of the B-spline basis. Subjects with missing values of \code{Bspline_Z} are omitted from the analysis. This argument is optional.
+#' @param data Specifies the name of the dataset. This argument is required.
+#' @param hn_scale Specifies the scale of the perturbation constant in the variance estimation. For example, if \code{hn_scale = 0.5}, then the perturbation constant is \eqn{0.5n^{-1/2}}, where \eqn{n} is the first-phase sample size in the analysis. The default value is \code{1}. This argument is optional, and is not needed when there is no \code{Z}.
+#' @param MAX_ITER Specifies the maximum number of iterations in the EM algorithm. The default number is \code{2000}. This argument is optional.
+#' @param TOL Specifies the convergence criterion in the EM algorithm. The default value is \code{1E-4}. This argument is optional.
+#' @param noSE If \code{TRUE}, then the variances of the parameter estimators will not be estimated. The default value is \code{FALSE}. This argument is optional.
+#' @return
+#' \item{coefficients}{Stores the analysis results.}
+#' \item{convergence}{In parameter estimation, if the EM algorithm converges, then \code{convergence = TRUE}. Otherwise, \code{convergence = FALSE}.}
+#' \item{convergence_var}{In variance estimation, if the EM algorithm converges, then \code{convergence_cov = TRUE}. Otherwise, \code{convergence_cov = FALSE}.}
+#' @examples
+#' library(TwoPhaseReg)
+#' n = 2000
+#' n2 = 600
+#' true_beta = 0.3
+#' true_gamma = 0.4
+#' true_eta = 0.5
+#' seed = 12345
+#' r = 0.3
+#' N_SIEVE = 8
+#'
+#' #### when Z is a scaler
+#' set.seed(12345)
+#' simW = runif(n)
+#' U2 = runif(n)
+#' simX = runif(n)
+#' simZ = r*simX+U2
+#' simY = true_beta*simX+true_gamma*simZ+true_eta*simW+rnorm(n)
+#' order.simY = order(simY)
+#' phase2.id = c(order.simY[1:(n2/2)], order.simY[(n-(n2/2)+1):n])
+#' Bspline_Z = matrix(NA, nrow=n, ncol=N_SIEVE)
+#' cut_z = cut(simZ, breaks=quantile(simZ, probs=seq(0, 1, 1/N_SIEVE)), include.lowest = TRUE)
+#' for (i in 1:N_SIEVE)
+#' {
+#'     Bspline_Z[,i] = as.numeric(cut_z == names(table(cut_z))[i])
+#' }
+#' colnames(Bspline_Z) = paste("bs", 1:N_SIEVE, sep="")
+#' dat = data.frame(Y=simY, X=simX, Z=simZ, W=simW, Bspline_Z)
+#' dat[-phase2.id,"X"] = NA
+#' 
+#' res = smle(Y="Y", X="X", Z="Z", W="W", Bspline_Z=colnames(Bspline_Z), data=dat)
+#' res
+#'
+#' #### when Z is two-dimensional
+#' library(splines)
+#' set.seed(12345)
+#' U1 = runif(n)
+#' U2 = runif(n)
+#' simX = runif(n)
+#' simZ_1 = r*simX+U1
+#' simZ_2 = r*simX+U2
+#' simY = true_beta*simX+true_gamma*simZ_1+true_eta*simZ_2+rnorm(n)
+#' order.simY = order(simY)
+#' phase2.id = c(order.simY[1:(n2/2)], order.simY[(n-(n2/2)+1):n])
+#' bs1 = bs(simZ_1, df=N_SIEVE, degree=1, Boundary.knots=range(simZ_1), intercept=TRUE)
+#' bs2 = bs(simZ_2, df=N_SIEVE, degree=1, Boundary.knots=range(simZ_2), intercept=TRUE)
+#' Bspline_Z = matrix(NA, ncol=N_SIEVE^2, nrow=n)
+#' for (i in 1:ncol(bs1)) {
+#'     for (j in 1:ncol(bs2)) {
+#'         idx = i*N_SIEVE+j-N_SIEVE
+#'         Bspline_Z[,idx] = bs1[,i]*bs2[,j]
+#'     }
+#' }
+#' colnames(Bspline_Z) = paste("bs", 1:ncol(Bspline_Z), sep="")
+#' dat = data.frame(Y=simY, X=simX, Z1=simZ_1, Z2=simZ_2, Bspline_Z)
+#' dat[-phase2.id,"X"] = NA
+#'
+#' res = smle(Y="Y", X="X", Z=c("Z1", "Z2"), Bspline_Z=colnames(Bspline_Z), data=dat)
+#' res
+#' @references Tao, R., Zeng, D., and Lin, D. Y. "Efficient Semiparametric Inference Under Two-Phase Sampling, with Applications to Genetic Association Studies", under revision.
+#' @useDynLib TwoPhaseReg
+#' @importFrom Rcpp evalCpp
+#' @importFrom stats pchisq
+#' @exportPattern "^[[:alpha:]]+"
+smle <- function (Y=NULL, X=NULL, Z=NULL, W=NULL, Bspline_Z=NULL, data=NULL, hn_scale=1, MAX_ITER=2000,
+    TOL=1E-4, noSE=FALSE) {
+
+    ###############################################################################################################
+    #### check data ###############################################################################################
+	storage.mode(MAX_ITER) = "integer"
+	storage.mode(TOL) = "double"
+	storage.mode(noSE) = "integer"
+
+	if (is.null(data)) {
+	    stop("No dataset is provided!")
+	}
+
+	if (is.null(Y)) {
+		stop("The response Y is not specified!")
+	} else {
+	    Y_vec = as.vector(data[,Y])
+		storage.mode(Y_vec) = "double"
+		vars_ph1 = Y
+	}
+
+	if (is.null(X)) {
+		stop("The expensive covariates X are not specified!")
+	} else {
+	    X_mat = as.matrix(data[,X])
+		storage.mode(X_mat) = "double"
+	}
+
+	if (!is.null(Z)) {
+	    if (is.null(Bspline_Z)) {
+	        stop("The B-spline functions Bspline_Z are not specified!")
+	    } else {
+    	    Z_mat = as.matrix(data[,Z])
+    		storage.mode(Z_mat) = "double"
+    		Bspline_Z_mat = as.matrix(data[,Bspline_Z])
+    		storage.mode(Bspline_Z_mat) = "double"
+    		vars_ph1 = c(vars_ph1, Z, Bspline_Z)
+	    }
+	}
+
+	if (!is.null(W)) {
+	    W_mat = as.matrix(data[,W])
+		storage.mode(W_mat) = "double"
+		vars_ph1 = c(vars_ph1, W)
+	}
+
+    id_exclude = c()
+    for (var in vars_ph1) {
+        id_exclude = union(id_exclude, which(is.na(data[,var])))
+    }
+
+    print(paste("There are", nrow(data), "observations in the dataset."))
+    print(paste(length(id_exclude), "observations are excluded due to missing Y, Z, W, or Bspline_Z."))
+	if (length(id_exclude) > 0) {
+		data = data[-id_exclude,]
+	}
+    n = nrow(data)
+    print(paste("There are", n, "observations in the analysis."))
+
+    id_phase1 = c()
+    for (var in X) {
+        id_phase1 = union(id_phase1, which(is.na(data[,var])))
+    }
+	print(paste("There are", n-length(id_phase1), "observations with complete measurements of expensive covariates."))
+
+    Y_vec = c(as.vector(Y_vec[-id_phase1]), as.vector(Y_vec[id_phase1]))
+    X_mat = as.matrix(X_mat[-id_phase1,])
+    if (!is.null(Z)) {
+        Z_mat = rbind(as.matrix(Z_mat[-id_phase1,]), as.matrix(Z_mat[id_phase1,]))
+        Bspline_Z_mat = rbind(as.matrix(Bspline_Z_mat[-id_phase1,]), as.matrix(Bspline_Z_mat[id_phase1,]))
+    }
+    if (!is.null(W)) {
+        W_mat = rbind(as.matrix(W_mat[-id_phase1,]), as.matrix(W_mat[id_phase1,]))
+    }
+
+	hn = hn_scale/sqrt(n)
+
+    #### check data ###############################################################################################
+	###############################################################################################################
+
+	cov_names = c("Intercept", X)
+	if (!is.null(Z))
+	{
+		cov_names = c(cov_names, Z)
+	}
+	if (!is.null(W))
+	{
+		cov_names = c(cov_names, W)
+	}
+	ncov = length(cov_names)
+	rowmap = rep(NA, ncov)
+	res_coefficients = matrix(NA, nrow=ncov, ncol=4)
+	colnames(res_coefficients) = c("Estimate", "SE", "Statistic", "p-value")
+	rownames(res_coefficients) = cov_names
+
+	if (is.null(W)) {
+	    W_mat = rep(1., n)
+		if (is.null(Z)) {
+			rowmap[1] = ncov
+			rowmap[2:ncov] = 1:length(X)
+		    res = .Call("TwoPhase_MLE0", Y_vec, X_mat, W_mat, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
+		} else {
+			rowmap[1] = ncov
+			rowmap[2:(length(X)+1)] = 1:length(X)
+			rowmap[(length(X)+2):ncov] = (length(X)+1):(length(X)+length(Z))
+			res = .Call("TwoPhase_GeneralSpline", Y_vec, X_mat, Z_mat, W_mat, Bspline_Z_mat, hn, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
+		}
+	} else {
+		W_mat = cbind(1., W_mat)
+		if (is.null(Z)) {
+			rowmap[1] = length(X)+1
+			rowmap[2:(length(X)+1)] = 1:length(X)
+			rowmap[(length(X)+2):ncov] = (length(X)+2):ncov
+		    res = .Call("TwoPhase_MLE0", Y_vec, X_mat, W_mat, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
+		} else {
+			rowmap[1] = length(X)+length(Z)+1
+			rowmap[2:(length(X)+1)] = 1:length(X)
+			rowmap[(length(X)+2):(length(X)+length(Z)+1)] = (length(X)+1):(length(X)+length(Z))
+			rowmap[(length(X)+length(Z)+2):ncov] = (length(X)+length(Z)+2):ncov
+			res = .Call("TwoPhase_GeneralSpline", Y_vec, X_mat, Z_mat, W_mat, Bspline_Z_mat, hn, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
+		}
+    }
+
+    ###############################################################################################################
+    #### return results ###########################################################################################
+ 	res_coefficients[,1] = res$theta[rowmap]
+	res_coefficients[which(res_coefficients[,1] == -999),1] = NA
+	res_coefficients[,2] = sqrt(diag(res$cov_theta))[rowmap]
+	res_coefficients[which(res_coefficients[,2] == -999),2] = NA
+
+	 id_NA = which(is.na(res_coefficients[,1]) | is.na(res_coefficients[,2]))
+	if (length(id_NA) > 0)
+	{
+	    res_coefficients[-id_NA,3] = res_coefficients[-id_NA,1]/res_coefficients[-id_NA,2]
+	    res_coefficients[-id_NA,4] = 1-pchisq(res_coefficients[-id_NA,3]^2, df=1)
+	}
+	else
+	{
+	    res_coefficients[,3] = res_coefficients[,1]/res_coefficients[,2]
+	    res_coefficients[,4] = 1-pchisq(res_coefficients[,3]^2, df=1)
+	}
+	res_final = list(coefficients=res_coefficients, convergence=!res$flag_nonconvergence, convergence_var=!res$flag_nonconvergence_cov)
+	res_final
+    #### return results ###########################################################################################
+    ###############################################################################################################
+}
