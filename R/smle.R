@@ -1,6 +1,7 @@
 #' Performs efficient semiparametric estimation for regression models under general two-phase designs.
 #'
-#' @param Y Specifies the column of the outcome. Subjects with missing values of \code{Y} are omitted from the analysis. This option is required.
+#' @param Y Specifies the column of the continuous, binary (\eqn{0} or \eqn{1}), or time-to-event outcomes. Subjects with missing values of \code{Y} are omitted from the analysis. This option is required.
+#' @param Delta Specifies the column of the event indicators. This option is required when performing Cox proportional hazards regression.
 #' @param X Specifies the columns of expensive covariates. Subjects with missing values of \code{X} are considered as those not selected in the second phase. This argument is required.
 #' @param Z Specifies the columns of the inexpensive covariates that are potentially correlated with \code{X}. Subjects with missing values of \code{Z} are omitted from the analysis. This argument is optional.
 #' @param W Specifies the columns of the inexpensive covariates that are independent of \code{X} given \code{Z}. Subjects with missing values of \code{W} are omitted from the analysis. This argument is optional.
@@ -10,6 +11,8 @@
 #' @param MAX_ITER Specifies the maximum number of iterations in the EM algorithm. The default number is \code{2000}. This argument is optional.
 #' @param TOL Specifies the convergence criterion in the EM algorithm. The default value is \code{1E-4}. This argument is optional.
 #' @param noSE If \code{TRUE}, then the variances of the parameter estimators will not be estimated. The default value is \code{FALSE}. This argument is optional.
+#' @param model Specifies the model. Possible values are "linear", "logistic", and "coxph". The default value is "linear".
+#' @param verbose If \code{TRUE}, then show details of the analysis. The default value is \code{FALSE}.
 #' @return
 #' \item{coefficients}{Stores the analysis results.}
 #' \item{convergence}{In parameter estimation, if the EM algorithm converges, then \code{convergence = TRUE}. Otherwise, \code{convergence = FALSE}.}
@@ -73,19 +76,23 @@
 #'
 #' res = smle(Y="Y", X="X", Z=c("Z1", "Z2"), Bspline_Z=colnames(Bspline_Z), data=dat)
 #' res
-#' @references Tao, R., Zeng, D., and Lin, D. Y. "Efficient Semiparametric Inference Under Two-Phase Sampling, with Applications to Genetic Association Studies", under revision.
+#' @references Tao, R., Zeng, D., and Lin, D. Y. (2017). "Efficient Semiparametric Inference Under Two-Phase Sampling, with Applications to Genetic Association Studies", Journal of the American Statistical Association, in press.
 #' @useDynLib TwoPhaseReg
 #' @importFrom Rcpp evalCpp
 #' @importFrom stats pchisq
 #' @exportPattern "^[[:alpha:]]+"
-smle <- function (Y=NULL, X=NULL, Z=NULL, W=NULL, Bspline_Z=NULL, data=NULL, hn_scale=1, MAX_ITER=2000,
-    TOL=1E-4, noSE=FALSE) {
+smle <- function (Y=NULL, Delta=NULL, X=NULL, Z=NULL, W=NULL, Bspline_Z=NULL, data=NULL, hn_scale=1, MAX_ITER=2000,
+    TOL=1E-4, noSE=FALSE, model="linear", verbose=FALSE) {
 
     ###############################################################################################################
     #### check data ###############################################################################################
-	storage.mode(MAX_ITER) = "integer"
+    storage.mode(MAX_ITER) = "integer"
 	storage.mode(TOL) = "double"
 	storage.mode(noSE) = "integer"
+	
+	if (!(model %in% c("linear", "logistic", "coxph"))) {
+	    stop("Model should be linear, logistic, or coxph!")
+	}
 
 	if (is.null(data)) {
 	    stop("No dataset is provided!")
@@ -94,33 +101,30 @@ smle <- function (Y=NULL, X=NULL, Z=NULL, W=NULL, Bspline_Z=NULL, data=NULL, hn_
 	if (is.null(Y)) {
 		stop("The response Y is not specified!")
 	} else {
-	    Y_vec = as.vector(data[,Y])
-		storage.mode(Y_vec) = "double"
 		vars_ph1 = Y
+	}
+	
+	if (model == "coxph") {
+		if (is.null(Delta)) {
+			stop("The event indicator Delta is not specified!")
+		} else {
+			vars_ph1 = c(vars_ph1, Delta)
+		}
 	}
 
 	if (is.null(X)) {
 		stop("The expensive covariates X are not specified!")
-	} else {
-	    X_mat = as.matrix(data[,X])
-		storage.mode(X_mat) = "double"
 	}
 
 	if (!is.null(Z)) {
 	    if (is.null(Bspline_Z)) {
 	        stop("The B-spline functions Bspline_Z are not specified!")
 	    } else {
-    	    Z_mat = as.matrix(data[,Z])
-    		storage.mode(Z_mat) = "double"
-    		Bspline_Z_mat = as.matrix(data[,Bspline_Z])
-    		storage.mode(Bspline_Z_mat) = "double"
     		vars_ph1 = c(vars_ph1, Z, Bspline_Z)
 	    }
 	}
 
-	if (!is.null(W)) {
-	    W_mat = as.matrix(data[,W])
-		storage.mode(W_mat) = "double"
+	if (!is.null(W)) {	
 		vars_ph1 = c(vars_ph1, W)
 	}
 
@@ -128,87 +132,161 @@ smle <- function (Y=NULL, X=NULL, Z=NULL, W=NULL, Bspline_Z=NULL, data=NULL, hn_
     for (var in vars_ph1) {
         id_exclude = union(id_exclude, which(is.na(data[,var])))
     }
-
-    print(paste("There are", nrow(data), "observations in the dataset."))
-    print(paste(length(id_exclude), "observations are excluded due to missing Y, Z, W, or Bspline_Z."))
+	
+	if (verbose) {
+    	print(paste("There are", nrow(data), "observations in the dataset."))
+    	print(paste(length(id_exclude), "observations are excluded due to missing Y, Delta, Z, W, or Bspline_Z."))
+	}
 	if (length(id_exclude) > 0) {
 		data = data[-id_exclude,]
 	}
+	
     n = nrow(data)
-    print(paste("There are", n, "observations in the analysis."))
+	if (verbose) {
+    	print(paste("There are", n, "observations in the analysis."))
+	}
 
     id_phase1 = c()
     for (var in X) {
         id_phase1 = union(id_phase1, which(is.na(data[,var])))
     }
-	print(paste("There are", n-length(id_phase1), "observations with complete measurements of expensive covariates."))
-
-    Y_vec = c(as.vector(Y_vec[-id_phase1]), as.vector(Y_vec[id_phase1]))
-    X_mat = as.matrix(X_mat[-id_phase1,])
-    if (!is.null(Z)) {
-        Z_mat = rbind(as.matrix(Z_mat[-id_phase1,]), as.matrix(Z_mat[id_phase1,]))
-        Bspline_Z_mat = rbind(as.matrix(Bspline_Z_mat[-id_phase1,]), as.matrix(Bspline_Z_mat[id_phase1,]))
-    }
-    if (!is.null(W)) {
-        W_mat = rbind(as.matrix(W_mat[-id_phase1,]), as.matrix(W_mat[id_phase1,]))
-    }
-
-	hn = hn_scale/sqrt(n)
-
+	if (verbose) {
+		print(paste("There are", n-length(id_phase1), "observations with complete measurements of expensive covariates."))
+	}
     #### check data ###############################################################################################
 	###############################################################################################################
 
-	cov_names = c("Intercept", X)
-	if (!is.null(Z))
+	
+	
+	###############################################################################################################
+	#### prepare analysis##########################################################################################	
+    Y_vec = c(as.vector(data[-id_phase1,Y]), as.vector(data[id_phase1,Y]))
+	storage.mode(Y_vec) = "double"
+	
+	if (!is.null(Delta))
 	{
+		Delta_vec = c(as.vector(data[-id_phase1,Delta]), as.vector(data[id_phase1,Delta]))
+		storage.mode(Delta_vec) = "integer"
+	}
+	
+    X_mat = as.matrix(data[-id_phase1,X])
+	storage.mode(X_mat) = "double"
+	
+    if (!is.null(Z)) {
+        Z_mat = rbind(as.matrix(data[-id_phase1,Z]), as.matrix(data[id_phase1,Z]))
+		storage.mode(Z_mat) = "double"
+        Bspline_Z_mat = rbind(as.matrix(data[-id_phase1,Bspline_Z]), as.matrix(data[id_phase1,Bspline_Z]))
+		storage.mode(Bspline_Z_mat) = "double"
+    }
+	
+    if (!is.null(W)) {
+        W_mat = rbind(as.matrix(data[-id_phase1,W]), as.matrix(data[id_phase1,W]))
+		storage.mode(W_mat) = "double"
+    }
+	
+	if (model == "coxph") {
+		cov_names = X
+	} else {
+		cov_names = c("Intercept", X)
+	}		
+	if (!is.null(Z)) {
 		cov_names = c(cov_names, Z)
 	}
-	if (!is.null(W))
-	{
+	if (!is.null(W)) {
 		cov_names = c(cov_names, W)
 	}
+	
 	ncov = length(cov_names)
+	X_nc = length(X)
 	rowmap = rep(NA, ncov)
 	res_coefficients = matrix(NA, nrow=ncov, ncol=4)
 	colnames(res_coefficients) = c("Estimate", "SE", "Statistic", "p-value")
 	rownames(res_coefficients) = cov_names
+	
+	if (model %in% c("linear", "logistic")) {
+		if (is.null(W)) {	    
+			if (is.null(Z)) {
+				ZW_mat = rep(1., n)
+				rowmap[1] = ncov
+				rowmap[2:ncov] = 1:X_nc
+			} else {
+				ZW_mat = cbind(1, Z_mat)
+				rowmap[1] = X_nc+1
+				rowmap[2:(X_nc+1)] = 1:X_nc
+				rowmap[(X_nc+2):ncov] = (X_nc+2):ncov
+			}
+		} else {
+			if (is.null(Z)) {
+				ZW_mat = cbind(1., W_mat)
+			} else {
+				ZW_mat = cbind(1., Z_mat, W_mat)
+			}
+			rowmap[1] = X_nc+1
+			rowmap[2:(X_nc+1)] = 1:X_nc
+			rowmap[(X_nc+2):ncov] = (X_nc+2):ncov
+		}	
+	} else if (model == "coxph") {
+		if (is.null(W)) {	    
+			if (is.null(Z)) {
+				ZW_mat = NULL
+			} else {
+				ZW_mat = Z_mat
+			}
+		} else {
+			if (is.null(Z)) {
+				ZW_mat = W_mat
+			} else {
+				ZW_mat = cbind(Z_mat, W_mat)
+			}
+		}
+		rowmap = 1:ncov
+	}
+	
+	hn = hn_scale/sqrt(n)
+	#### prepare analysis##########################################################################################
+	###############################################################################################################
+	
 
-	if (is.null(W)) {
-	    W_mat = rep(1., n)
+	
+	###############################################################################################################
+	#### analysis #################################################################################################
+	if (model == "linear") {
 		if (is.null(Z)) {
-			rowmap[1] = ncov
-			rowmap[2:ncov] = 1:length(X)
-		    res = .Call("TwoPhase_MLE0", Y_vec, X_mat, W_mat, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
+			res = .Call("TwoPhase_MLE0", Y_vec, X_mat, ZW_mat, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
 		} else {
-			rowmap[1] = ncov
-			rowmap[2:(length(X)+1)] = 1:length(X)
-			rowmap[(length(X)+2):ncov] = (length(X)+1):(length(X)+length(Z))
-			res = .Call("TwoPhase_GeneralSpline", Y_vec, X_mat, Z_mat, W_mat, Bspline_Z_mat, hn, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
+			res = .Call("TwoPhase_GeneralSpline", Y_vec, X_mat, ZW_mat, Bspline_Z_mat, hn, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
 		}
-	} else {
-		W_mat = cbind(1., W_mat)
+	} else if (model == "logistic") {
 		if (is.null(Z)) {
-			rowmap[1] = length(X)+1
-			rowmap[2:(length(X)+1)] = 1:length(X)
-			rowmap[(length(X)+2):ncov] = (length(X)+2):ncov
-		    res = .Call("TwoPhase_MLE0", Y_vec, X_mat, W_mat, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
+			res = .Call("TwoPhase_MLE0_logistic", Y_vec, X_mat, ZW_mat, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
 		} else {
-			rowmap[1] = length(X)+length(Z)+1
-			rowmap[2:(length(X)+1)] = 1:length(X)
-			rowmap[(length(X)+2):(length(X)+length(Z)+1)] = (length(X)+1):(length(X)+length(Z))
-			rowmap[(length(X)+length(Z)+2):ncov] = (length(X)+length(Z)+2):ncov
-			res = .Call("TwoPhase_GeneralSpline", Y_vec, X_mat, Z_mat, W_mat, Bspline_Z_mat, hn, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
+			res = .Call("TwoPhase_GeneralSpline_logistic", Y_vec, X_mat, ZW_mat, Bspline_Z_mat, hn, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
 		}
-    }
+	} else if (model == "coxph") {
+		if (is.null(Z)) {
+			if (is.null(W)) {
+				res = .Call("TwoPhase_MLE0_noZW_coxph", Y_vec, Delta_vec, X_mat, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
+			} else {
+				res = .Call("TwoPhase_MLE0_coxph", Y_vec, Delta_vec, X_mat, ZW_mat, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
+			}
+		} else {
+			res = .Call("TwoPhase_GeneralSpline_coxph", Y_vec, Delta_vec, X_mat, ZW_mat, Bspline_Z_mat, hn, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
+		}
+	}
+    #### analysis #################################################################################################
+	###############################################################################################################
+	
+	
 
     ###############################################################################################################
     #### return results ###########################################################################################
  	res_coefficients[,1] = res$theta[rowmap]
 	res_coefficients[which(res_coefficients[,1] == -999),1] = NA
-	res_coefficients[,2] = sqrt(diag(res$cov_theta))[rowmap]
+	res_coefficients[,2] = diag(res$cov_theta)[rowmap]
 	res_coefficients[which(res_coefficients[,2] == -999),2] = NA
-
-	 id_NA = which(is.na(res_coefficients[,1]) | is.na(res_coefficients[,2]))
+	res_coefficients[which(res_coefficients[,2] != -999),2] = sqrt(res_coefficients[which(res_coefficients[,2] != -999),2])
+	
+	id_NA = which(is.na(res_coefficients[,1]) | is.na(res_coefficients[,2]))
 	if (length(id_NA) > 0)
 	{
 	    res_coefficients[-id_NA,3] = res_coefficients[-id_NA,1]/res_coefficients[-id_NA,2]

@@ -4,12 +4,14 @@
 \alias{smle}
 \title{Performs efficient semiparametric estimation for regression models under general two-phase designs.}
 \usage{
-smle(Y = NULL, X = NULL, Z = NULL, W = NULL, Bspline_Z = NULL,
-  data = NULL, hn_scale = 1, MAX_ITER = 2000, TOL = 1e-04,
-  noSE = FALSE)
+smle(Y = NULL, Delta = NULL, X = NULL, Z = NULL, W = NULL,
+  Bspline_Z = NULL, data = NULL, hn_scale = 1, MAX_ITER = 2000,
+  TOL = 1e-04, noSE = FALSE, model = "linear", verbose = FALSE)
 }
 \arguments{
-\item{Y}{Specifies the column of the outcome. Subjects with missing values of \code{Y} are omitted from the analysis. This option is required.}
+\item{Y}{Specifies the column of the continuous, binary (\eqn{0} or \eqn{1}), or time-to-event outcomes. Subjects with missing values of \code{Y} are omitted from the analysis. This option is required.}
+
+\item{Delta}{Specifies the column of the event indicators. This option is required when performing Cox proportional hazards regression.}
 
 \item{X}{Specifies the columns of expensive covariates. Subjects with missing values of \code{X} are considered as those not selected in the second phase. This argument is required.}
 
@@ -28,6 +30,10 @@ smle(Y = NULL, X = NULL, Z = NULL, W = NULL, Bspline_Z = NULL,
 \item{TOL}{Specifies the convergence criterion in the EM algorithm. The default value is \code{1E-4}. This argument is optional.}
 
 \item{noSE}{If \code{TRUE}, then the variances of the parameter estimators will not be estimated. The default value is \code{FALSE}. This argument is optional.}
+
+\item{model}{Specifies the model. Possible values are "linear", "logistic", and "coxph". The default value is "linear".}
+
+\item{verbose}{If \code{TRUE}, then show details of the analysis. The default value is \code{FALSE}.}
 }
 \value{
 \item{coefficients}{Stores the analysis results.}
@@ -98,6 +104,6 @@ res = smle(Y="Y", X="X", Z=c("Z1", "Z2"), Bspline_Z=colnames(Bspline_Z), data=da
 res
 }
 \references{
-Tao, R., Zeng, D., and Lin, D. Y. "Efficient Semiparametric Inference Under Two-Phase Sampling, with Applications to Genetic Association Studies", under revision.
+Tao, R., Zeng, D., and Lin, D. Y. (2017). "Efficient Semiparametric Inference Under Two-Phase Sampling, with Applications to Genetic Association Studies", Journal of the American Statistical Association, in press.
 }
 
