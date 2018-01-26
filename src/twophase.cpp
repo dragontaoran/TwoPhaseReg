@@ -1752,7 +1752,83 @@ RcppExport SEXP TwoPhase_GeneralSpline_coxph (SEXP Y_R, SEXP Delta_R, SEXP X_R, 
 	} 
 	else 
 	{
-		// to be added
+		VectorXd profile_vec(ncov);
+		MatrixXd profile_mat(ncov, ncov);
+		MatrixXd logp(m, s);
+		MatrixXd inv_profile_mat(ncov, ncov);
+		double loglik;
+				
+		profile_mat.setZero();
+		profile_vec.setZero();
+		
+		loglik = WaldCoxphGeneralSplineProfile(pB, p_col_sum, ZW_theta, X_uni_theta, e_X_uni_theta, e_X_theta, lambda, lambda0, Lambda, q_row_sum, p, p0, P_theta, q, logp,
+			theta, Y, Delta, X, Bspline_uni, ZW, X_uni, X_uni_ind, Bspline_uni_ind, Y_uni_event, Y_uni_event_n, 
+			Y_risk_ind, p_static, n, n2, m, n_event_uni, s, n_minus_n2, X_nc, ZW_nc, MAX_ITER, TOL);
+		if (loglik == -999.) 
+		{
+			flag_nonconvergence_cov = true;
+		}
+		for (int i=0; i<ncov; i++) 
+		{
+			for (int j=i; j<ncov; j++) 
+			{
+				profile_mat(i,j) = loglik;
+			}
+		}
+
+		for (int i=0; i<ncov; i++) 
+		{
+			theta0 = theta;
+			theta0(i) += hn;
+			profile_vec(i) = WaldCoxphGeneralSplineProfile(pB, p_col_sum, ZW_theta, X_uni_theta, e_X_uni_theta, e_X_theta, lambda, lambda0, Lambda, q_row_sum, p, p0, P_theta, q, logp,
+				theta0, Y, Delta, X, Bspline_uni, ZW, X_uni, X_uni_ind, Bspline_uni_ind, Y_uni_event, Y_uni_event_n, 
+				Y_risk_ind, p_static, n, n2, m, n_event_uni, s, n_minus_n2, X_nc, ZW_nc, MAX_ITER, TOL);
+		}
+		for (int i=0; i<ncov; i++) 
+		{
+			if(profile_vec(i) == -999.) 
+			{
+				flag_nonconvergence_cov = true;
+			}
+		}
+		
+		for (int i=0; i<ncov; i++) 
+		{
+			for (int j=i; j<ncov; j++) 
+			{
+				theta0 = theta;
+				theta0(i) += hn;
+				theta0(j) += hn;
+				loglik = WaldCoxphGeneralSplineProfile(pB, p_col_sum, ZW_theta, X_uni_theta, e_X_uni_theta, e_X_theta, lambda, lambda0, Lambda, q_row_sum, p, p0, P_theta, q, logp,
+					theta0, Y, Delta, X, Bspline_uni, ZW, X_uni, X_uni_ind, Bspline_uni_ind, Y_uni_event, Y_uni_event_n, 
+					Y_risk_ind, p_static, n, n2, m, n_event_uni, s, n_minus_n2, X_nc, ZW_nc, MAX_ITER, TOL);
+				if (loglik == -999.) 
+				{
+					flag_nonconvergence_cov = true;
+				}				
+				profile_mat(i,j) += loglik;
+				profile_mat(i,j) -= profile_vec(i)+profile_vec(j);
+			}
+		}
+				
+		if (flag_nonconvergence_cov == true) 
+		{
+			cov_theta.setConstant(-999.);
+		} 
+		else 
+		{		
+			for (int i=0; i<ncov; i++) 
+			{
+				for (int j=i+1; j<ncov; j++) 
+				{
+					profile_mat(j,i) = profile_mat(i,j);
+				}
+			}		
+			profile_mat /= hn*hn;
+			profile_mat = -profile_mat;
+			inv_profile_mat = profile_mat.selfadjointView<Eigen::Upper>().ldlt().solve(MatrixXd::Identity(ncov, ncov));
+			cov_theta = inv_profile_mat.topLeftCorner(ncov,ncov);
+		}
 	}
 	/**** variance estimation **********************************************************************************************************************/
 	/*#############################################################################################################################################*/

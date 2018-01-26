@@ -467,8 +467,12 @@ double WaldLinearGeneralSplineProfile (Ref<MatrixXd> pB, Ref<RowVectorXd> p_col_
 	/**** update P_theta ***************************************************************************************************************************/
 		
 	/**** parameter initialization *****************************************************************************************************************/
-	p.setConstant(1./m);
-	p0.setConstant(1./m);
+	p_col_sum = p_static.colwise().sum();
+	for (int j=0; j<s; j++) 
+	{
+		p.col(j) = p_static.col(j)/p_col_sum(j);
+	}
+	p0 = p;
 	/**** parameter initialization *****************************************************************************************************************/
 	
 	for (iter=0; iter<MAX_ITER; iter++) 
@@ -654,4 +658,251 @@ void WaldLinearVarianceMLE0 (Ref<MatrixXd> cov_theta, const Ref<const MatrixXd>&
 	/**** augment the upper diagonal of Q **********************************************************************************************************/		
 	inv_profile_mat = Q.topLeftCorner(dimQ-1,dimQ-1).selfadjointView<Eigen::Upper>().ldlt().solve(MatrixXd::Identity(dimQ-1, dimQ-1));
 	cov_theta = inv_profile_mat.topLeftCorner(ncov,ncov);	
-}
+} // WaldLinearVarianceMLE0
+
+double WaldCoxphGeneralSplineProfile (Ref<MatrixXd> pB, Ref<RowVectorXd> p_col_sum, Ref<VectorXd> ZW_theta, Ref<VectorXd> X_uni_theta, Ref<MatrixXd> e_X_uni_theta,
+	Ref<VectorXd> e_X_theta, Ref<VectorXd> lambda, Ref<VectorXd> lambda0, Ref<VectorXd> Lambda,
+	Ref<VectorXd> q_row_sum, Ref<MatrixXd> p, Ref<MatrixXd> p0, Ref<MatrixXd> P_theta, Ref<MatrixXd> q, Ref<MatrixXd> logp,
+	const Ref<const VectorXd>& theta, const Ref<const VectorXd>& Y, const Ref<const VectorXi>& Delta, const Ref<const MatrixXd>& X, 
+	const Ref<const MatrixXd>& Bspline_uni, const Ref<const MatrixXd>& ZW, const Ref<const MatrixXd>& X_uni, const Ref<const VectorXi>& X_uni_ind, 
+	const Ref<const VectorXi>& Bspline_uni_ind, const Ref<const VectorXd>& Y_uni_event, const Ref<const VectorXi>& Y_uni_event_n, 
+	const Ref<const VectorXi>& Y_risk_ind, const Ref<const MatrixXd>& p_static, const int n, const int n2, const int m, const int n_event_uni, 
+	const int s, const int n_minus_n2, const int X_nc, const int ZW_nc, const int MAX_ITER, const double TOL) 
+{
+	/*#############################################################################################################################################*/
+	/**** temporary variables **********************************************************************************************************************/
+	double tol;
+	int iter, idx;
+	// /* RT test block */
+	// time_t t1, t2;
+	// /* RT test block */
+	/**** temporary variables **********************************************************************************************************************/
+	/*#############################################################################################################################################*/
+		
+	/*#############################################################################################################################################*/
+	/**** EM algorithm *****************************************************************************************************************************/
+	
+	/**** fixed quantities *************************************************************************************************************************/
+	ZW_theta = ZW*theta.tail(ZW_nc);
+	X_uni_theta = X_uni*theta.head(X_nc);
+	for (int i=0; i<n_minus_n2; i++)
+	{
+		for (int k=0; k<m; k++)
+		{
+			e_X_uni_theta(i,k) = ZW_theta(i+n2)+X_uni_theta(k);
+		}
+	}
+	e_X_uni_theta = e_X_uni_theta.array().exp();
+	
+	for (int i=0; i<n2; i++)
+	{
+		e_X_theta(i) = ZW_theta(i)+X_uni_theta(X_uni_ind(i));
+	}
+	e_X_theta = e_X_theta.array().exp();
+	/**** fixed quantities *************************************************************************************************************************/
+	
+	/**** parameter initialization *****************************************************************************************************************/
+	p_col_sum = p_static.colwise().sum();
+	for (int j=0; j<s; j++) 
+	{
+		p.col(j) = p_static.col(j)/p_col_sum(j);
+	}
+	p0 = p;
+		
+	lambda.setZero();
+	for (int i=0; i<n_event_uni; i++)
+	{
+		for (int i1=0; i1<n; i1++)
+		{
+			if (Y(i1) >= Y_uni_event(i))
+			{
+				lambda(i) ++;
+			}
+		}
+		lambda(i) = (Y_uni_event_n(i)+0.)/lambda(i);
+	}
+	lambda0 = lambda;
+	Lambda(0) = lambda(0);
+	for (int i=1; i<n_event_uni; i++)
+	{
+		Lambda(i) = Lambda(i-1)+lambda(i);
+	}
+	/**** parameter initialization *****************************************************************************************************************/
+	
+	for (iter=0; iter<MAX_ITER; iter++) 
+	{
+		// /* RT test block */
+		// time(&t1);
+		// /* RT test block */
+		
+		/**** E-step *******************************************************************************************************************************/
+		
+		/**** update pB ****************************************************************************************************************************/
+		pB = Bspline_uni*p.transpose();
+		/**** update pB ****************************************************************************************************************************/
+				
+		/**** update P_theta ***********************************************************************************************************************/		
+		for (int i=0; i<n_minus_n2; i++)
+		{
+			idx = i+n2;
+			if (Y_risk_ind(idx) > -1)
+			{
+				P_theta.row(i) = -Lambda(Y_risk_ind(idx))*e_X_uni_theta.row(i);
+				P_theta.row(i) = P_theta.row(i).array().exp();
+				if (Delta(idx) == 1)
+				{
+					P_theta.row(i) *= lambda(Y_risk_ind(idx));
+					P_theta.row(i) = P_theta.row(i).array()*e_X_uni_theta.row(i).array();
+				}
+			}
+			else
+			{
+				if (Delta(idx) == 1)
+				{
+					stdError("Error: In TwoPhase_GeneralSpline_coxph, the calculation of unique event times is wrong!");
+				}
+				
+				P_theta.row(i).setOnes();			
+			}
+		}
+		/**** update P_theta ***********************************************************************************************************************/
+		
+		/**** update q, q_row_sum ******************************************************************************************************************/
+		for (int i=0; i<n_minus_n2; i++) 
+		{
+			for (int k=0; k<m; k++) 
+			{
+				q(i,k) = P_theta(i,k)*pB(Bspline_uni_ind(i+n2),k);
+			}
+		}
+		q_row_sum = q.rowwise().sum();		
+		for (int i=0; i<n_minus_n2; i++) 
+		{
+			q.row(i) /= q_row_sum(i);
+		}
+		/**** update q, q_row_sum ******************************************************************************************************************/
+		
+		/**** E-step *******************************************************************************************************************************/
+		
+		
+		/**** M-step *******************************************************************************************************************************/
+		
+		/**** update lambda ************************************************************************************************************************/
+		lambda.setZero();
+		
+		for (int i=0; i<n_event_uni; i++)
+		{
+			for (int i1=0; i1<n2; i1++)
+			{
+				if (Y(i1) >= Y_uni_event(i))
+				{
+					lambda(i) += e_X_theta(i1);
+				}
+			}
+			for (int i1=0; i1<n_minus_n2; i1++)
+			{
+				if (Y(i1+n2) >= Y_uni_event(i))
+				{
+					for (int k=0; k<m; k++)
+					{
+						lambda(i) += q(i1,k)*e_X_uni_theta(i1,k);
+					}						
+				}
+			}
+			lambda(i) = (Y_uni_event_n(i)+0.)/lambda(i);
+		}
+		Lambda(0) = lambda(0);
+		for (int i=1; i<n_event_uni; i++)
+		{
+			Lambda(i) = Lambda(i-1)+lambda(i);
+		}		
+		/**** update lambda ************************************************************************************************************************/
+		
+		/**** update p *****************************************************************************************************************************/
+		p.setZero();		
+		for (int i=0; i<n_minus_n2; i++) 
+		{
+			for (int k=0; k<m; k++) 
+			{
+				for (int j=0; j<s; j++) 
+				{
+					p(k,j) += Bspline_uni(Bspline_uni_ind(i+n2),j)*P_theta(i,k)/q_row_sum(i);
+				}
+			}
+		}		
+		p = p.array()*p0.array();
+		p += p_static;
+		p_col_sum = p.colwise().sum();
+		for (int j=0; j<s; j++) 
+		{
+			p.col(j) /= p_col_sum(j);
+		}
+		/**** update p *****************************************************************************************************************************/
+		
+		/**** M-step *******************************************************************************************************************************/
+		
+		
+		/**** calculate the sum of absolute differences between estimates in the current and previous iterations ***********************************/
+		tol = (lambda-lambda0).array().abs().sum();
+		tol += (p-p0).array().abs().sum();
+		/**** calculate the sum of absolute differences between estimates in the current and previous iterations ***********************************/		
+				
+		/**** update parameters ********************************************************************************************************************/
+		lambda0 = lambda;
+		p0 = p;
+		/**** update parameters ********************************************************************************************************************/
+		
+		/**** check convergence ********************************************************************************************************************/
+		if (tol < TOL) 
+		{
+			break;
+		}
+		/**** check convergence ********************************************************************************************************************/
+
+		// /* RT test block */
+		// time(&t2);
+		// Rcout << iter << '\t' << difftime(t2, t1) << '\t' << tol << endl;
+		// /* RT test block */
+	}
+	/**** EM algorithm *****************************************************************************************************************************/
+	/*#############################################################################################################################################*/
+
+	if (iter == MAX_ITER) 
+	{
+		return -999.;
+	} 
+	else 
+	{
+		/**** calculate the likelihood *************************************************************************************************************/
+		double loglik;
+		
+		logp = p.array().log();
+		pB = Bspline_uni*logp.transpose();
+		
+		loglik = 0.;
+		for (int i=0; i<n2; i++) {
+			loglik += pB(Bspline_uni_ind(i),X_uni_ind(i));
+			loglik -= Lambda(Y_risk_ind(i))*e_X_theta(i);
+			if (Delta(i) == 1)
+			{
+				loglik += log(lambda(Y_risk_ind(i)))+ZW_theta(i)+X_uni_theta(X_uni_ind(i));
+			}
+		}
+		
+		pB = Bspline_uni*p.transpose();;
+		
+		for (int i=0; i<n_minus_n2; i++) 
+		{
+			for (int k=0; k<m; k++) 
+			{
+				q(i,k) = P_theta(i,k)*pB(Bspline_uni_ind(i+n2),k);
+			}
+		}
+		q_row_sum = q.rowwise().sum();		
+		
+		loglik += q_row_sum.array().log().sum();		
+		/**** calculate the likelihood *************************************************************************************************************/
+		
+		return loglik;	
+	}
+} // WaldCoxphGeneralSplineProfile
