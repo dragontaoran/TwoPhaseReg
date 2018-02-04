@@ -1764,6 +1764,7 @@ RcppExport SEXP TwoPhase_GeneralSpline_coxph (SEXP Y_R, SEXP Delta_R, SEXP X_R, 
 		loglik = WaldCoxphGeneralSplineProfile(pB, p_col_sum, ZW_theta, X_uni_theta, e_X_uni_theta, e_X_theta, lambda, lambda0, Lambda, q_row_sum, p, p0, P_theta, q, logp,
 			theta, Y, Delta, X, Bspline_uni, ZW, X_uni, X_uni_ind, Bspline_uni_ind, Y_uni_event, Y_uni_event_n, 
 			Y_risk_ind, p_static, n, n2, m, n_event_uni, s, n_minus_n2, X_nc, ZW_nc, MAX_ITER, TOL);
+
 		if (loglik == -999.) 
 		{
 			flag_nonconvergence_cov = true;
@@ -1826,6 +1827,7 @@ RcppExport SEXP TwoPhase_GeneralSpline_coxph (SEXP Y_R, SEXP Delta_R, SEXP X_R, 
 			}		
 			profile_mat /= hn*hn;
 			profile_mat = -profile_mat;
+
 			inv_profile_mat = profile_mat.selfadjointView<Eigen::Upper>().ldlt().solve(MatrixXd::Identity(ncov, ncov));
 			cov_theta = inv_profile_mat.topLeftCorner(ncov,ncov);
 		}

@@ -562,6 +562,16 @@ double WaldLinearGeneralSplineProfile (Ref<MatrixXd> pB, Ref<RowVectorXd> p_col_
 		double tmp, loglik;
 		
 		logp = p.array().log();
+		for (int k=0; k<m; k++)
+		{
+			for (int j=0; j<s; j++)
+			{
+				if (p(k,j) <= 0.)
+				{
+					logp(k,j) = 0.;
+				}
+			}
+		}
 		pB = Bspline_uni*logp.transpose();
 		
 		loglik = 0.;
@@ -877,6 +887,16 @@ double WaldCoxphGeneralSplineProfile (Ref<MatrixXd> pB, Ref<RowVectorXd> p_col_s
 		double loglik;
 		
 		logp = p.array().log();
+		for (int k=0; k<m; k++)
+		{
+			for (int j=0; j<s; j++)
+			{
+				if (p(k,j) <= 0.)
+				{
+					logp(k,j) = 0.;
+				}
+			}
+		}
 		pB = Bspline_uni*logp.transpose();
 		
 		loglik = 0.;
@@ -900,7 +920,7 @@ double WaldCoxphGeneralSplineProfile (Ref<MatrixXd> pB, Ref<RowVectorXd> p_col_s
 		}
 		q_row_sum = q.rowwise().sum();		
 		
-		loglik += q_row_sum.array().log().sum();		
+		loglik += q_row_sum.array().log().sum();	
 		/**** calculate the likelihood *************************************************************************************************************/
 		
 		return loglik;	
