@@ -1,10 +1,10 @@
 #' Performs efficient semiparametric estimation for regression models under general two-phase designs.
 #'
 #' @param Y Specifies the column of the continuous, binary (\eqn{0} or \eqn{1}), or time-to-event outcomes. Subjects with missing values of \code{Y} are omitted from the analysis. This option is required.
+#' @param L Specifies the column of left-truncation times. Missing values are set to \eqn{0}. This option is optional when performing Cox proportional hazards regression.
 #' @param Delta Specifies the column of the event indicators. This option is required when performing Cox proportional hazards regression.
 #' @param X Specifies the columns of expensive covariates. Subjects with missing values of \code{X} are considered as those not selected in the second phase. This argument is required.
-#' @param Z Specifies the columns of the inexpensive covariates that are potentially correlated with \code{X}. Subjects with missing values of \code{Z} are omitted from the analysis. This argument is optional.
-#' @param W Specifies the columns of the inexpensive covariates that are independent of \code{X} given \code{Z}. Subjects with missing values of \code{W} are omitted from the analysis. This argument is optional.
+#' @param Z Specifies the columns of the inexpensive covariates. Subjects with missing values of \code{Z} are omitted from the analysis. This argument is optional.
 #' @param Bspline_Z Specifies the columns of the B-spline basis. Subjects with missing values of \code{Bspline_Z} are omitted from the analysis. This argument is optional.
 #' @param data Specifies the name of the dataset. This argument is required.
 #' @param hn_scale Specifies the scale of the perturbation constant in the variance estimation. For example, if \code{hn_scale = 0.5}, then the perturbation constant is \eqn{0.5n^{-1/2}}, where \eqn{n} is the first-phase sample size in the analysis. The default value is \code{1}. This argument is optional, and is not needed when there is no \code{Z}.
@@ -28,7 +28,7 @@
 #' r = 0.3
 #' N_SIEVE = 8
 #'
-#' #### when Z is a scaler
+#' #### Sieve with histogram bases
 #' set.seed(12345)
 #' simW = runif(n)
 #' U2 = runif(n)
@@ -47,10 +47,10 @@
 #' dat = data.frame(Y=simY, X=simX, Z=simZ, W=simW, Bspline_Z)
 #' dat[-phase2.id,"X"] = NA
 #' 
-#' res = smle(Y="Y", X="X", Z="Z", W="W", Bspline_Z=colnames(Bspline_Z), data=dat)
+#' res = smle(Y="Y", X="X", Z=c("Z","W"), Bspline_Z=colnames(Bspline_Z), data=dat)
 #' res
 #'
-#' #### when Z is two-dimensional
+#' #### Sieve with linear bases
 #' library(splines)
 #' set.seed(12345)
 #' U1 = runif(n)
@@ -76,12 +76,12 @@
 #'
 #' res = smle(Y="Y", X="X", Z=c("Z1", "Z2"), Bspline_Z=colnames(Bspline_Z), data=dat)
 #' res
-#' @references Tao, R., Zeng, D., and Lin, D. Y. (2017). "Efficient Semiparametric Inference Under Two-Phase Sampling, with Applications to Genetic Association Studies", Journal of the American Statistical Association, in press.
+#' @references Tao, R., Zeng, D., and Lin, D. Y. (2017). "Efficient Semiparametric Inference Under Two-Phase Sampling, with Applications to Genetic Association Studies", Journal of the American Statistical Association, 112: 1468-1476.
 #' @useDynLib TwoPhaseReg
 #' @importFrom Rcpp evalCpp
 #' @importFrom stats pchisq
 #' @exportPattern "^[[:alpha:]]+"
-smle <- function (Y=NULL, Delta=NULL, X=NULL, Z=NULL, W=NULL, Bspline_Z=NULL, data=NULL, hn_scale=1, MAX_ITER=2000,
+smle <- function (Y=NULL, L=NULL, Delta=NULL, X=NULL, Z=NULL, W=NULL, Bspline_Z=NULL, data=NULL, hn_scale=1, MAX_ITER=2000,
     TOL=1E-4, noSE=FALSE, model="linear", verbose=FALSE) {
 
     ###############################################################################################################
@@ -110,6 +110,9 @@ smle <- function (Y=NULL, Delta=NULL, X=NULL, Z=NULL, W=NULL, Bspline_Z=NULL, da
 		} else {
 			vars_ph1 = c(vars_ph1, Delta)
 		}
+	    if (!is.null(L)) {
+	        data[which(is.na(data[,L])),L] = 0
+	    }
 	}
 
 	if (is.null(X)) {
@@ -124,10 +127,6 @@ smle <- function (Y=NULL, Delta=NULL, X=NULL, Z=NULL, W=NULL, Bspline_Z=NULL, da
 	    }
 	}
 
-	if (!is.null(W)) {	
-		vars_ph1 = c(vars_ph1, W)
-	}
-
     id_exclude = c()
     for (var in vars_ph1) {
         id_exclude = union(id_exclude, which(is.na(data[,var])))
@@ -135,7 +134,7 @@ smle <- function (Y=NULL, Delta=NULL, X=NULL, Z=NULL, W=NULL, Bspline_Z=NULL, da
 	
 	if (verbose) {
     	print(paste("There are", nrow(data), "observations in the dataset."))
-    	print(paste(length(id_exclude), "observations are excluded due to missing Y, Delta, Z, W, or Bspline_Z."))
+    	print(paste(length(id_exclude), "observations are excluded due to missing Y, Delta, Z, or Bspline_Z."))
 	}
 	if (length(id_exclude) > 0) {
 		data = data[-id_exclude,]
@@ -169,6 +168,12 @@ smle <- function (Y=NULL, Delta=NULL, X=NULL, Z=NULL, W=NULL, Bspline_Z=NULL, da
 		storage.mode(Delta_vec) = "integer"
 	}
 	
+	if (!is.null(L))
+	{
+	    L_vec = c(as.vector(data[-id_phase1,L]), as.vector(data[id_phase1,L]))
+	    storage.mode(L_vec) = "double"
+	}
+	
     X_mat = as.matrix(data[-id_phase1,X])
 	storage.mode(X_mat) = "double"
 	
@@ -179,11 +184,6 @@ smle <- function (Y=NULL, Delta=NULL, X=NULL, Z=NULL, W=NULL, Bspline_Z=NULL, da
 		storage.mode(Bspline_Z_mat) = "double"
     }
 	
-    if (!is.null(W)) {
-        W_mat = rbind(as.matrix(data[-id_phase1,W]), as.matrix(data[id_phase1,W]))
-		storage.mode(W_mat) = "double"
-    }
-	
 	if (model == "coxph") {
 		cov_names = X
 	} else {
@@ -191,9 +191,6 @@ smle <- function (Y=NULL, Delta=NULL, X=NULL, Z=NULL, W=NULL, Bspline_Z=NULL, da
 	}		
 	if (!is.null(Z)) {
 		cov_names = c(cov_names, Z)
-	}
-	if (!is.null(W)) {
-		cov_names = c(cov_names, W)
 	}
 	
 	ncov = length(cov_names)
@@ -204,41 +201,20 @@ smle <- function (Y=NULL, Delta=NULL, X=NULL, Z=NULL, W=NULL, Bspline_Z=NULL, da
 	rownames(res_coefficients) = cov_names
 	
 	if (model %in% c("linear", "logistic")) {
-		if (is.null(W)) {	    
-			if (is.null(Z)) {
-				ZW_mat = rep(1., n)
-				rowmap[1] = ncov
-				rowmap[2:ncov] = 1:X_nc
-			} else {
-				ZW_mat = cbind(1, Z_mat)
-				rowmap[1] = X_nc+1
-				rowmap[2:(X_nc+1)] = 1:X_nc
-				rowmap[(X_nc+2):ncov] = (X_nc+2):ncov
-			}
+		if (is.null(Z)) {
+			Z_mat = rep(1., n)
+			rowmap[1] = ncov
+			rowmap[2:ncov] = 1:X_nc
 		} else {
-			if (is.null(Z)) {
-				ZW_mat = cbind(1., W_mat)
-			} else {
-				ZW_mat = cbind(1., Z_mat, W_mat)
-			}
+			Z_mat = cbind(1, Z_mat)
 			rowmap[1] = X_nc+1
 			rowmap[2:(X_nc+1)] = 1:X_nc
 			rowmap[(X_nc+2):ncov] = (X_nc+2):ncov
-		}	
-	} else if (model == "coxph") {
-		if (is.null(W)) {	    
-			if (is.null(Z)) {
-				ZW_mat = NULL
-			} else {
-				ZW_mat = Z_mat
-			}
-		} else {
-			if (is.null(Z)) {
-				ZW_mat = W_mat
-			} else {
-				ZW_mat = cbind(Z_mat, W_mat)
-			}
 		}
+	} else if (model == "coxph") {
+	    if (is.null(Z)) {
+	        Z_mat = NULL
+	    }
 		rowmap = 1:ncov
 	}
 	
@@ -252,25 +228,31 @@ smle <- function (Y=NULL, Delta=NULL, X=NULL, Z=NULL, W=NULL, Bspline_Z=NULL, da
 	#### analysis #################################################################################################
 	if (model == "linear") {
 		if (is.null(Z)) {
-			res = .Call("TwoPhase_MLE0", Y_vec, X_mat, ZW_mat, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
+			res = .Call("TwoPhase_MLE0", Y_vec, X_mat, Z_mat, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
 		} else {
-			res = .Call("TwoPhase_GeneralSpline", Y_vec, X_mat, ZW_mat, Bspline_Z_mat, hn, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
+			res = .Call("TwoPhase_GeneralSpline", Y_vec, X_mat, Z_mat, Bspline_Z_mat, hn, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
 		}
 	} else if (model == "logistic") {
 		if (is.null(Z)) {
-			res = .Call("TwoPhase_MLE0_logistic", Y_vec, X_mat, ZW_mat, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
+			res = .Call("TwoPhase_MLE0_logistic", Y_vec, X_mat, Z_mat, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
 		} else {
-			res = .Call("TwoPhase_GeneralSpline_logistic", Y_vec, X_mat, ZW_mat, Bspline_Z_mat, hn, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
+			res = .Call("TwoPhase_GeneralSpline_logistic", Y_vec, X_mat, Z_mat, Bspline_Z_mat, hn, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
 		}
 	} else if (model == "coxph") {
 		if (is.null(Z)) {
 			if (is.null(W)) {
 				res = .Call("TwoPhase_MLE0_noZW_coxph", Y_vec, Delta_vec, X_mat, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
 			} else {
-				res = .Call("TwoPhase_MLE0_coxph", Y_vec, Delta_vec, X_mat, ZW_mat, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
+				res = .Call("TwoPhase_MLE0_coxph", Y_vec, Delta_vec, X_mat, Z_mat, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
 			}
 		} else {
-			res = .Call("TwoPhase_GeneralSpline_coxph", Y_vec, Delta_vec, X_mat, ZW_mat, Bspline_Z_mat, hn, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
+		    if (is.null(L))
+		    {
+		        res = .Call("TwoPhase_GeneralSpline_coxph", Y_vec, Delta_vec, X_mat, Z_mat, Bspline_Z_mat, hn, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
+		    } else {
+		        res = .Call("TwoPhase_GeneralSpline_coxph_LeftTrunc", Y_vec, L_vec, Delta_vec, X_mat, Z_mat, Bspline_Z_mat, hn, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
+		    }
+			
 		}
 	}
     #### analysis #################################################################################################

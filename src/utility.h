@@ -33,9 +33,14 @@ void Num_Distinct_Events (const Ref<const VectorXd>& Y, const Ref<const VectorXi
  "Y_uni_event" is a vector of unique events.
  "Y_risk_ind" is a vector of indexes to which one of the risk sets each element in "Y" corresponds.
  "Y_uni_event_n" is a vector of numbers of events corresponding to each unique event time.
+ "L" is the vector of left-truncation times.
+ "L_index" is the index vector of L output by "indexx_Vector()".
+ "L_risk_ind" is a vector of indexes to which one of the risk sets each element in "L" corresponds.
 ***************************************************************************************/
 void Create_Uni_Events (const Ref<const VectorXd>& Y, const Ref<const VectorXi>& Y_index, const Ref<const VectorXi>& Delta, 
 	Ref<VectorXd> Y_uni_event, Ref<VectorXi> Y_risk_ind, Ref<VectorXi> Y_uni_event_n);
+void Create_Uni_Events_LeftTrunc (const Ref<const VectorXd>& Y, const Ref<const VectorXd>& L, const Ref<const VectorXi>& Y_index, const Ref<const VectorXi>& L_index,
+	const Ref<const VectorXi>& Delta, Ref<VectorXd> Y_uni_event, Ref<VectorXi> Y_risk_ind, Ref<VectorXi> Y_uni_event_n, Ref<VectorXi> L_risk_ind);
 
 double Var(const Ref<const VectorXd>& arr);
 double WaldLinearGeneralSplineProfile (Ref<MatrixXd> pB, Ref<RowVectorXd> p_col_sum,
@@ -54,5 +59,13 @@ double WaldCoxphGeneralSplineProfile (Ref<MatrixXd> pB, Ref<RowVectorXd> p_col_s
 	const Ref<const MatrixXd>& Bspline_uni, const Ref<const MatrixXd>& ZW, const Ref<const MatrixXd>& X_uni, const Ref<const VectorXi>& X_uni_ind, 
 	const Ref<const VectorXi>& Bspline_uni_ind, const Ref<const VectorXd>& Y_uni_event, const Ref<const VectorXi>& Y_uni_event_n, 
 	const Ref<const VectorXi>& Y_risk_ind, const Ref<const MatrixXd>& p_static, const int n, const int n2, const int m, const int n_event_uni, 
+	const int s, const int n_minus_n2, const int X_nc, const int ZW_nc, const int MAX_ITER, const double TOL);
+double WaldCoxphGeneralSplineProfileLeftTrunc (Ref<MatrixXd> pB, Ref<RowVectorXd> p_col_sum, Ref<VectorXd> ZW_theta, Ref<VectorXd> X_uni_theta, Ref<MatrixXd> e_X_uni_theta,
+	Ref<VectorXd> e_X_theta, Ref<VectorXd> lambda, Ref<VectorXd> lambda0, Ref<VectorXd> Lambda,
+	Ref<VectorXd> q_row_sum, Ref<MatrixXd> p, Ref<MatrixXd> p0, Ref<MatrixXd> P_theta, Ref<MatrixXd> q, Ref<MatrixXd> logp,
+	const Ref<const VectorXd>& theta, const Ref<const VectorXd>& Y, const Ref<const VectorXd>& L, const Ref<const VectorXi>& Delta, const Ref<const MatrixXd>& X, 
+	const Ref<const MatrixXd>& Bspline_uni, const Ref<const MatrixXd>& ZW, const Ref<const MatrixXd>& X_uni, const Ref<const VectorXi>& X_uni_ind, 
+	const Ref<const VectorXi>& Bspline_uni_ind, const Ref<const VectorXd>& Y_uni_event, const Ref<const VectorXi>& Y_uni_event_n, 
+	const Ref<const VectorXi>& Y_risk_ind, const Ref<const VectorXi>& L_risk_ind, const Ref<const MatrixXd>& p_static, const int n, const int n2, const int m, const int n_event_uni, 
 	const int s, const int n_minus_n2, const int X_nc, const int ZW_nc, const int MAX_ITER, const double TOL);	
 #endif

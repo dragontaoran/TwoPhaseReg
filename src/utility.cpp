@@ -418,6 +418,131 @@ void Create_Uni_Events (const Ref<const VectorXd>& Y, const Ref<const VectorXi>&
 	}
 } // Create_Uni_Events
 
+void Create_Uni_Events_LeftTrunc (const Ref<const VectorXd>& Y, const Ref<const VectorXd>& L, const Ref<const VectorXi>& Y_index, const Ref<const VectorXi>& L_index,
+	const Ref<const VectorXi>& Delta, Ref<VectorXd> Y_uni_event, Ref<VectorXi> Y_risk_ind, Ref<VectorXi> Y_uni_event_n, Ref<VectorXi> L_risk_ind) 
+{
+	double event_prev;
+	int k = -1, n_event = Y_uni_event.size();
+	
+	if (Delta(Y_index(0)) == 1)
+	{
+		k++;
+		Y_uni_event(k) = Y(Y_index(0));
+		Y_uni_event_n(k) = 1;
+		event_prev = Y(Y_index(0));
+	}
+	else
+	{
+		event_prev = -999.;
+	}
+	
+	for(int i=0; i<Y.size()-1; i++) 
+	{
+		if(Y(Y_index(i)) == Y(Y_index(i+1)))
+		{
+			if (Delta(Y_index(i+1)) == 1) 
+			{
+				if (event_prev != Y(Y_index(i+1)))
+				{
+					k++;
+					Y_uni_event(k) = Y(Y_index(i+1));
+					Y_uni_event_n(k) = 1;
+					event_prev = Y(Y_index(i+1));		
+				}
+				else
+				{
+					Y_uni_event_n(k) += 1;
+				}
+			}
+		}
+		else if (Y(Y_index(i)) < Y(Y_index(i+1))) 
+		{
+			if (Delta(Y_index(i+1)) == 1) 
+			{
+				k++;
+				Y_uni_event(k) = Y(Y_index(i+1));
+				Y_uni_event_n(k) = 1;
+				event_prev = Y(Y_index(i+1));
+			}
+		}
+		else
+		{
+			stdError("Error: In Create_Uni_Events_LeftTrunc(), Y(Y_index(i)) > Y(Y_index(i+1))");
+		}
+	}
+		
+	if (Delta.sum() != Y_uni_event_n.sum())
+	{
+		stdError("Error: In Create_Uni_Events_LeftTrunc(), Delta.sum() != Y_uni_event_n.sum()");
+	}
+	
+	if (k != n_event-1)
+	{
+		stdError("Error: In Create_Uni_Events_LeftTrunc(), k != n_event-1");
+	}
+	else
+	{
+		for (int i=Y.size()-1; i>-1; i--)
+		{
+			if (Y(Y_index(i)) >= Y_uni_event(n_event-1))
+			{
+				Y_risk_ind(Y_index(i)) = n_event-1;
+			}
+			else if (Y(Y_index(i)) < Y_uni_event(0))
+			{
+				Y_risk_ind(Y_index(i)) = -1;
+			}
+			else if (Y(Y_index(i)) >= Y_uni_event(k-1) && Y(Y_index(i)) < Y_uni_event(k))
+			{
+				Y_risk_ind(Y_index(i)) = k-1;
+			}
+			else if (Y(Y_index(i)) < Y_uni_event(k-1))
+			{
+				k--;
+				i++;
+			}
+			else
+			{
+				stdError("Error: In Create_Uni_Events_LeftTrunc(), error in calculating Y_risk_ind()");
+			}
+		}
+		if (k != 1)
+		{
+			stdError("Error: In Create_Uni_Events_LeftTrunc(), k != 1");
+		}
+		
+		k = n_event-1;
+		for (int i=L.size()-1; i>-1; i--)
+		{
+			if (L(L_index(i)) >= Y_uni_event(n_event-1))
+			{
+				L_risk_ind(L_index(i)) = n_event-1;
+			}
+			else if (L(L_index(i)) < Y_uni_event(0))
+			{
+				L_risk_ind(L_index(i)) = -1;
+			}
+			else if (L(L_index(i)) >= Y_uni_event(k-1) && L(L_index(i)) < Y_uni_event(k))
+			{
+				L_risk_ind(L_index(i)) = k-1;
+			}
+			else if (L(L_index(i)) < Y_uni_event(k-1))
+			{
+				k--;
+				i++;
+			}
+			else
+			{
+				stdError("Error: In Create_Uni_Events_LeftTrunc(), error in calculating L_risk_ind()");
+			}
+		}
+		if (k != 1)
+		{
+			stdError("Error: In Create_Uni_Events_LeftTrunc(), k != 1");
+		}
+	}
+} // Create_Uni_Events_LeftTrunc
+
 double Var (const Ref<const VectorXd>& arr) 
 {
 	const int n = arr.rows();
@@ -769,7 +894,7 @@ double WaldCoxphGeneralSplineProfile (Ref<MatrixXd> pB, Ref<RowVectorXd> p_col_s
 			{
 				if (Delta(idx) == 1)
 				{
-					stdError("Error: In TwoPhase_GeneralSpline_coxph, the calculation of unique event times is wrong!");
+					stdError("Error: In WaldCoxphGeneralSplineProfile, the calculation of unique event times is wrong!");
 				}
 				
 				P_theta.row(i).setOnes();			
@@ -926,3 +1051,275 @@ double WaldCoxphGeneralSplineProfile (Ref<MatrixXd> pB, Ref<RowVectorXd> p_col_s
 		return loglik;	
 	}
 } // WaldCoxphGeneralSplineProfile
+
+double WaldCoxphGeneralSplineProfileLeftTrunc (Ref<MatrixXd> pB, Ref<RowVectorXd> p_col_sum, Ref<VectorXd> ZW_theta, Ref<VectorXd> X_uni_theta, Ref<MatrixXd> e_X_uni_theta,
+	Ref<VectorXd> e_X_theta, Ref<VectorXd> lambda, Ref<VectorXd> lambda0, Ref<VectorXd> Lambda,
+	Ref<VectorXd> q_row_sum, Ref<MatrixXd> p, Ref<MatrixXd> p0, Ref<MatrixXd> P_theta, Ref<MatrixXd> q, Ref<MatrixXd> logp,
+	const Ref<const VectorXd>& theta, const Ref<const VectorXd>& Y, const Ref<const VectorXd>& L, const Ref<const VectorXi>& Delta, const Ref<const MatrixXd>& X, 
+	const Ref<const MatrixXd>& Bspline_uni, const Ref<const MatrixXd>& ZW, const Ref<const MatrixXd>& X_uni, const Ref<const VectorXi>& X_uni_ind, 
+	const Ref<const VectorXi>& Bspline_uni_ind, const Ref<const VectorXd>& Y_uni_event, const Ref<const VectorXi>& Y_uni_event_n, 
+	const Ref<const VectorXi>& Y_risk_ind, const Ref<const VectorXi>& L_risk_ind, const Ref<const MatrixXd>& p_static, const int n, const int n2, const int m, const int n_event_uni, 
+	const int s, const int n_minus_n2, const int X_nc, const int ZW_nc, const int MAX_ITER, const double TOL) 
+{
+	/*#############################################################################################################################################*/
+	/**** temporary variables **********************************************************************************************************************/
+	double tol;
+	int iter, idx, idx1;
+	// /* RT test block */
+	// time_t t1, t2;
+	// /* RT test block */
+	/**** temporary variables **********************************************************************************************************************/
+	/*#############################################################################################################################################*/
+		
+	/*#############################################################################################################################################*/
+	/**** EM algorithm *****************************************************************************************************************************/
+	
+	/**** fixed quantities *************************************************************************************************************************/
+	ZW_theta = ZW*theta.tail(ZW_nc);
+	X_uni_theta = X_uni*theta.head(X_nc);
+	for (int i=0; i<n_minus_n2; i++)
+	{
+		for (int k=0; k<m; k++)
+		{
+			e_X_uni_theta(i,k) = ZW_theta(i+n2)+X_uni_theta(k);
+		}
+	}
+	e_X_uni_theta = e_X_uni_theta.array().exp();
+	
+	for (int i=0; i<n2; i++)
+	{
+		e_X_theta(i) = ZW_theta(i)+X_uni_theta(X_uni_ind(i));
+	}
+	e_X_theta = e_X_theta.array().exp();
+	/**** fixed quantities *************************************************************************************************************************/
+	
+	/**** parameter initialization *****************************************************************************************************************/
+	p_col_sum = p_static.colwise().sum();
+	for (int j=0; j<s; j++) 
+	{
+		p.col(j) = p_static.col(j)/p_col_sum(j);
+	}
+	p0 = p;
+		
+	lambda.setZero();
+	for (int i=0; i<n_event_uni; i++)
+	{
+		for (int i1=0; i1<n; i1++)
+		{
+			if (Y(i1) >= Y_uni_event(i) && L(i1) <= Y_uni_event(i))
+			{
+				lambda(i) ++;
+			}
+		}
+		lambda(i) = (Y_uni_event_n(i)+0.)/lambda(i);
+	}
+	lambda0 = lambda;
+	Lambda(0) = lambda(0);
+	for (int i=1; i<n_event_uni; i++)
+	{
+		Lambda(i) = Lambda(i-1)+lambda(i);
+	}
+	/**** parameter initialization *****************************************************************************************************************/
+	
+	for (iter=0; iter<MAX_ITER; iter++) 
+	{
+		// /* RT test block */
+		// time(&t1);
+		// /* RT test block */
+		
+		/**** E-step *******************************************************************************************************************************/
+		
+		/**** update pB ****************************************************************************************************************************/
+		pB = Bspline_uni*p.transpose();
+		/**** update pB ****************************************************************************************************************************/
+				
+		/**** update P_theta ***********************************************************************************************************************/		
+		for (int i=0; i<n_minus_n2; i++)
+		{
+			idx = i+n2;
+			if (Y_risk_ind(idx) > -1)
+			{
+				if (L_risk_ind(idx) == -1)
+				{
+					P_theta.row(i) = -Lambda(Y_risk_ind(idx))*e_X_uni_theta.row(i);
+				}
+				else
+				{
+					P_theta.row(i) = (-Lambda(Y_risk_ind(idx))+Lambda(L_risk_ind(idx)))*e_X_uni_theta.row(i);
+				}
+				P_theta.row(i) = P_theta.row(i).array().exp();
+				if (Delta(idx) == 1)
+				{
+					P_theta.row(i) *= lambda(Y_risk_ind(idx));
+					P_theta.row(i) = P_theta.row(i).array()*e_X_uni_theta.row(i).array();
+				}
+			}
+			else
+			{
+				if (Delta(idx) == 1)
+				{
+					stdError("Error: In WaldCoxphGeneralSplineProfileLeftTrunc, the calculation of unique event times is wrong!");
+				}
+				
+				P_theta.row(i).setOnes();			
+			}
+		}
+		/**** update P_theta ***********************************************************************************************************************/
+		
+		/**** update q, q_row_sum ******************************************************************************************************************/
+		for (int i=0; i<n_minus_n2; i++) 
+		{
+			for (int k=0; k<m; k++) 
+			{
+				q(i,k) = P_theta(i,k)*pB(Bspline_uni_ind(i+n2),k);
+			}
+		}
+		q_row_sum = q.rowwise().sum();		
+		for (int i=0; i<n_minus_n2; i++) 
+		{
+			q.row(i) /= q_row_sum(i);
+		}
+		/**** update q, q_row_sum ******************************************************************************************************************/
+		
+		/**** E-step *******************************************************************************************************************************/
+		
+		
+		/**** M-step *******************************************************************************************************************************/
+		
+		/**** update lambda ************************************************************************************************************************/
+		lambda.setZero();
+		
+		for (int i=0; i<n_event_uni; i++)
+		{
+			for (int i1=0; i1<n2; i1++)
+			{
+				if (Y(i1) >= Y_uni_event(i) && L(i1) <= Y_uni_event(i))
+				{
+					lambda(i) += e_X_theta(i1);
+				}
+			}
+			for (int i1=0; i1<n_minus_n2; i1++)
+			{
+				idx1 = i1+n2;
+				if (Y(idx1) >= Y_uni_event(i) && L(idx1) <= Y_uni_event(i))
+				{
+					for (int k=0; k<m; k++)
+					{
+						lambda(i) += q(i1,k)*e_X_uni_theta(i1,k);
+					}						
+				}
+			}
+			lambda(i) = (Y_uni_event_n(i)+0.)/lambda(i);
+		}
+		Lambda(0) = lambda(0);
+		for (int i=1; i<n_event_uni; i++)
+		{
+			Lambda(i) = Lambda(i-1)+lambda(i);
+		}		
+		/**** update lambda ************************************************************************************************************************/
+		
+		/**** update p *****************************************************************************************************************************/
+		p.setZero();		
+		for (int i=0; i<n_minus_n2; i++) 
+		{
+			for (int k=0; k<m; k++) 
+			{
+				for (int j=0; j<s; j++) 
+				{
+					p(k,j) += Bspline_uni(Bspline_uni_ind(i+n2),j)*P_theta(i,k)/q_row_sum(i);
+				}
+			}
+		}		
+		p = p.array()*p0.array();
+		p += p_static;
+		p_col_sum = p.colwise().sum();
+		for (int j=0; j<s; j++) 
+		{
+			p.col(j) /= p_col_sum(j);
+		}
+		/**** update p *****************************************************************************************************************************/
+		
+		/**** M-step *******************************************************************************************************************************/
+		
+		
+		/**** calculate the sum of absolute differences between estimates in the current and previous iterations ***********************************/
+		tol = (lambda-lambda0).array().abs().sum();
+		tol += (p-p0).array().abs().sum();
+		/**** calculate the sum of absolute differences between estimates in the current and previous iterations ***********************************/		
+				
+		/**** update parameters ********************************************************************************************************************/
+		lambda0 = lambda;
+		p0 = p;
+		/**** update parameters ********************************************************************************************************************/
+		
+		/**** check convergence ********************************************************************************************************************/
+		if (tol < TOL) 
+		{
+			break;
+		}
+		/**** check convergence ********************************************************************************************************************/
+
+		// /* RT test block */
+		// time(&t2);
+		// Rcout << iter << '\t' << difftime(t2, t1) << '\t' << tol << endl;
+		// /* RT test block */
+	}
+	/**** EM algorithm *****************************************************************************************************************************/
+	/*#############################################################################################################################################*/
+
+	if (iter == MAX_ITER) 
+	{
+		return -999.;
+	} 
+	else 
+	{
+		/**** calculate the likelihood *************************************************************************************************************/
+		double loglik;
+		
+		logp = p.array().log();
+		for (int k=0; k<m; k++)
+		{
+			for (int j=0; j<s; j++)
+			{
+				if (p(k,j) <= 0.)
+				{
+					logp(k,j) = 0.;
+				}
+			}
+		}
+		pB = Bspline_uni*logp.transpose();
+		
+		loglik = 0.;
+		for (int i=0; i<n2; i++) {
+			loglik += pB(Bspline_uni_ind(i),X_uni_ind(i));
+			if (L_risk_ind(i) == -1)
+			{
+				loglik -= Lambda(Y_risk_ind(i))*e_X_theta(i);
+			}
+			else
+			{
+				loglik -= (Lambda(Y_risk_ind(i))-Lambda(L_risk_ind(i)))*e_X_theta(i);
+			}
+			if (Delta(i) == 1)
+			{
+				loglik += log(lambda(Y_risk_ind(i)))+ZW_theta(i)+X_uni_theta(X_uni_ind(i));
+			}
+		}
+		
+		pB = Bspline_uni*p.transpose();;
+		
+		for (int i=0; i<n_minus_n2; i++) 
+		{
+			for (int k=0; k<m; k++) 
+			{
+				q(i,k) = P_theta(i,k)*pB(Bspline_uni_ind(i+n2),k);
+			}
+		}
+		q_row_sum = q.rowwise().sum();		
+		
+		loglik += q_row_sum.array().log().sum();	
+		/**** calculate the likelihood *************************************************************************************************************/
+		
+		return loglik;	
+	}
+} // WaldCoxphGeneralSplineProfileLeftTrunc
