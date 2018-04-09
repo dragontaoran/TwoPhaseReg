@@ -508,7 +508,7 @@ void Create_Uni_Events_LeftTrunc (const Ref<const VectorXd>& Y, const Ref<const 
 		}
 		if (k != 1)
 		{
-			stdError("Error: In Create_Uni_Events_LeftTrunc(), k != 1");
+			stdError("Error: In Create_Uni_Events_LeftTrunc(), k != 1 when calculating Y_risk_ind");
 		}
 		
 		k = n_event-1;
@@ -535,10 +535,6 @@ void Create_Uni_Events_LeftTrunc (const Ref<const VectorXd>& Y, const Ref<const 
 			{
 				stdError("Error: In Create_Uni_Events_LeftTrunc(), error in calculating L_risk_ind()");
 			}
-		}
-		if (k != 1)
-		{
-			stdError("Error: In Create_Uni_Events_LeftTrunc(), k != 1");
 		}
 	}
 } // Create_Uni_Events_LeftTrunc

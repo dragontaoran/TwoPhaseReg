@@ -30,24 +30,22 @@
 #'
 #' #### Sieve with histogram bases
 #' set.seed(12345)
-#' simW = runif(n)
 #' U2 = runif(n)
 #' simX = runif(n)
 #' simZ = r*simX+U2
-#' simY = true_beta*simX+true_gamma*simZ+true_eta*simW+rnorm(n)
+#' simY = true_beta*simX+true_gamma*simZ+rnorm(n)
 #' order.simY = order(simY)
 #' phase2.id = c(order.simY[1:(n2/2)], order.simY[(n-(n2/2)+1):n])
 #' Bspline_Z = matrix(NA, nrow=n, ncol=N_SIEVE)
 #' cut_z = cut(simZ, breaks=quantile(simZ, probs=seq(0, 1, 1/N_SIEVE)), include.lowest = TRUE)
-#' for (i in 1:N_SIEVE)
-#' {
+#' for (i in 1:N_SIEVE) {
 #'     Bspline_Z[,i] = as.numeric(cut_z == names(table(cut_z))[i])
 #' }
 #' colnames(Bspline_Z) = paste("bs", 1:N_SIEVE, sep="")
-#' dat = data.frame(Y=simY, X=simX, Z=simZ, W=simW, Bspline_Z)
+#' dat = data.frame(Y=simY, X=simX, Z=simZ, Bspline_Z)
 #' dat[-phase2.id,"X"] = NA
 #' 
-#' res = smle(Y="Y", X="X", Z=c("Z","W"), Bspline_Z=colnames(Bspline_Z), data=dat)
+#' res = smle(Y="Y", X="X", Z="Z", Bspline_Z=colnames(Bspline_Z), data=dat)
 #' res
 #'
 #' #### Sieve with linear bases
@@ -265,8 +263,8 @@ smle <- function (Y=NULL, L=NULL, Delta=NULL, X=NULL, Z=NULL, W=NULL, Bspline_Z=
  	res_coefficients[,1] = res$theta[rowmap]
 	res_coefficients[which(res_coefficients[,1] == -999),1] = NA
 	res_coefficients[,2] = diag(res$cov_theta)[rowmap]
-	res_coefficients[which(res_coefficients[,2] == -999),2] = NA
-	res_coefficients[which(res_coefficients[,2] != -999),2] = sqrt(res_coefficients[which(res_coefficients[,2] != -999),2])
+	res_coefficients[which(res_coefficients[,2] <= 0),2] = NA
+	res_coefficients[which(res_coefficients[,2] > 0),2] = sqrt(res_coefficients[which(res_coefficients[,2] > 0),2])
 	
 	id_NA = which(is.na(res_coefficients[,1]) | is.na(res_coefficients[,2]))
 	if (length(id_NA) > 0)
