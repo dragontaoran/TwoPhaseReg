@@ -1,13 +1,13 @@
 Package: TwoPhaseReg
 Type: Package
 Title: Regression Analysis Under General Two-Phase Sampling
-Version: 2.1
+Version: 2.2
 Author: Ran Tao <r.tao@vanderbilt.edu>
 Maintainer: Ran Tao <r.tao@vanderbilt.edu>
 Description: Efficient regression analysis under general two-phase, outcome-dependent sampling.
 License: GPL (>= 2)
 Imports:
-    Rcpp
+    Rcpp, lme4
 LinkingTo: Rcpp, RcppEigen, BH
 Suggests:
 	splines

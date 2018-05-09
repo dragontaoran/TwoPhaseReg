@@ -1,4 +1,3 @@
-#include <boost/math/distributions/normal.hpp>
 #include <RcppEigen.h>
 #include <iostream>
 #include <ctime>

@@ -1,4 +1,3 @@
-#include <boost/math/distributions/normal.hpp>
 #include <RcppEigen.h>
 #include <iostream>
 #include <ctime>
@@ -156,7 +155,7 @@ double WaldLinearGeneralSplineProfile (Ref<MatrixXd> pB, Ref<RowVectorXd> p_col_
 			loglik += pB(Bspline_uni_ind(i),X_uni_ind(i));
 		}
 		
-		pB = Bspline_uni*p.transpose();;
+		pB = Bspline_uni*p.transpose();
 		
 		for (int i=0; i<n_minus_n2; i++) 
 		{

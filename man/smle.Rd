@@ -2,11 +2,11 @@
 % Please edit documentation in R/smle.R
 \name{smle}
 \alias{smle}
-\title{Performs efficient semiparametric estimation for regression models with a univariate outcome under general two-phase designs.}
+\title{Performs efficient semiparametric estimation for regression models with univariate outcomes under general two-phase designs.}
 \usage{
-smle(Y = NULL, Delta = NULL, X = NULL, Z = NULL, W = NULL,
-  Bspline_Z = NULL, data = NULL, hn_scale = 1, MAX_ITER = 2000,
-  TOL = 1e-04, noSE = FALSE, model = "linear", verbose = FALSE)
+smle(Y = NULL, Delta = NULL, X = NULL, Z = NULL, Bspline_Z = NULL,
+  data = NULL, hn_scale = 1, MAX_ITER = 2000, TOL = 1e-04,
+  noSE = FALSE, model = "linear", verbose = FALSE)
 }
 \arguments{
 \item{Y}{Specifies the column of the continuous, binary (\eqn{0} or \eqn{1}), or censored outcome. Subjects with missing values of \code{Y} are omitted from the analysis. This argument is required.}
@@ -17,7 +17,7 @@ smle(Y = NULL, Delta = NULL, X = NULL, Z = NULL, W = NULL,
 
 \item{Z}{Specifies the columns of the inexpensive covariates. Subjects with missing values of \code{Z} are omitted from the analysis. This argument is optional.}
 
-\item{Bspline_Z}{Specifies the columns of the B-spline basis. Subjects with missing values of \code{Bspline_Z} are omitted from the analysis. This argument is optional.}
+\item{Bspline_Z}{Specifies the columns of the B-spline basis. Subjects with missing values of \code{Bspline_Z} are omitted from the analysis. This argument is not needed when \code{X} is independent of \code{Z}.}
 
 \item{data}{Specifies the name of the dataset. This argument is required.}
 
@@ -39,7 +39,7 @@ smle(Y = NULL, Delta = NULL, X = NULL, Z = NULL, W = NULL,
 \item{converge2}{In variance estimation, if the EM algorithm converges, then \code{converge2 = TRUE}. Otherwise, \code{converge2 = FALSE}.}
 }
 \description{
-Performs efficient semiparametric estimation for regression models with a univariate outcome under general two-phase designs.
+Performs efficient semiparametric estimation for regression models with univariate outcomes under general two-phase designs.
 }
 \references{
 Tao, R., Zeng, D., and Lin, D. Y. (2017). "Efficient Semiparametric Inference Under Two-Phase Sampling, with Applications to Genetic Association Studies", Journal of the American Statistical Association, 112: 1468-1476.

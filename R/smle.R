@@ -1,11 +1,11 @@
-#' Performs efficient semiparametric estimation for regression models with a univariate outcome under general two-phase designs.
+#' Performs efficient semiparametric estimation for regression models with univariate outcomes under general two-phase designs.
 #'
 #' @param Y Specifies the column of the continuous, binary (\eqn{0} or \eqn{1}), or censored outcome. Subjects with missing values of \code{Y} are omitted from the analysis. This argument is required.
 # #' @param L Specifies the column of the left-truncation time. Missing values are set to \eqn{0}. This argument is optional when performing proportional hazards regression. It is not needed when performing linear or logistic regression.
 #' @param Delta Specifies the column of the event indicator. This argument is required when performing proportional hazards regression.
 #' @param X Specifies the columns of the expensive covariates. Subjects with missing values of \code{X} are considered as those not selected in the second phase. This argument is required.
 #' @param Z Specifies the columns of the inexpensive covariates. Subjects with missing values of \code{Z} are omitted from the analysis. This argument is optional.
-#' @param Bspline_Z Specifies the columns of the B-spline basis. Subjects with missing values of \code{Bspline_Z} are omitted from the analysis. This argument is optional.
+#' @param Bspline_Z Specifies the columns of the B-spline basis. Subjects with missing values of \code{Bspline_Z} are omitted from the analysis. This argument is not needed when \code{X} is independent of \code{Z}. 
 #' @param data Specifies the name of the dataset. This argument is required.
 #' @param hn_scale Specifies the scale of the perturbation constant in the variance estimation. For example, if \code{hn_scale = 0.5}, then the perturbation constant is \eqn{0.5n^{-1/2}}, where \eqn{n} is the first-phase sample size. The default value is \code{1}. This argument is optional. It is not needed when there is no \code{Z}.
 #' @param MAX_ITER Specifies the maximum number of iterations in the EM algorithm. The default number is \code{2000}. This argument is optional.
@@ -81,7 +81,7 @@
 #' @exportPattern "^[[:alpha:]]+"
 smle <- function (Y=NULL, 
 	# L=NULL, 
-	Delta=NULL, X=NULL, Z=NULL, W=NULL, Bspline_Z=NULL, data=NULL, hn_scale=1, MAX_ITER=2000,
+	Delta=NULL, X=NULL, Z=NULL, Bspline_Z=NULL, data=NULL, hn_scale=1, MAX_ITER=2000,
     TOL=1E-4, noSE=FALSE, model="linear", verbose=FALSE) {
 
     ###############################################################################################################
@@ -120,13 +120,16 @@ smle <- function (Y=NULL,
 	}
 
 	if (!is.null(Z)) {
-	    if (is.null(Bspline_Z)) {
-	        stop("The B-spline functions Bspline_Z are not specified!")
-	    } else {
-    		vars_ph1 = c(vars_ph1, Z, Bspline_Z)
+		vars_ph1 = c(vars_ph1, Z)
+	    if (!is.null(Bspline_Z)) {
+    		vars_ph1 = c(vars_ph1, Bspline_Z)
 	    }
+	} else {
+		if (!is.null(Bspline_Z)) {
+			stop("Cannot specify Bspline_Z when Z is not specified!")
+		}
 	}
-
+	
     id_exclude = c()
     for (var in vars_ph1) {
         id_exclude = union(id_exclude, which(is.na(data[,var])))
@@ -180,8 +183,10 @@ smle <- function (Y=NULL,
     if (!is.null(Z)) {
         Z_mat = rbind(as.matrix(data[-id_phase1,Z]), as.matrix(data[id_phase1,Z]))
 		storage.mode(Z_mat) = "double"
-        Bspline_Z_mat = rbind(as.matrix(data[-id_phase1,Bspline_Z]), as.matrix(data[id_phase1,Bspline_Z]))
-		storage.mode(Bspline_Z_mat) = "double"
+		if (!is.null(Bspline_Z)) {
+			Bspline_Z_mat = rbind(as.matrix(data[-id_phase1,Bspline_Z]), as.matrix(data[id_phase1,Bspline_Z]))
+			storage.mode(Bspline_Z_mat) = "double"
+		}
     }
 	
 	if (model == "coxph") {
@@ -227,20 +232,20 @@ smle <- function (Y=NULL,
 	###############################################################################################################
 	#### analysis #################################################################################################
 	if (model == "linear") {
-		if (is.null(Z)) {
+		if (is.null(Bspline_Z)) {
 			res = .Call("TwoPhase_MLE0", Y_vec, X_mat, Z_mat, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
 		} else {
 			res = .Call("TwoPhase_GeneralSpline", Y_vec, X_mat, Z_mat, Bspline_Z_mat, hn, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
 		}
 	} else if (model == "logistic") {
-		if (is.null(Z)) {
+		if (is.null(Bspline_Z)) {
 			res = .Call("TwoPhase_MLE0_logistic", Y_vec, X_mat, Z_mat, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
 		} else {
 			res = .Call("TwoPhase_GeneralSpline_logistic", Y_vec, X_mat, Z_mat, Bspline_Z_mat, hn, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
 		}
 	} else if (model == "coxph") {
-		if (is.null(Z)) {
-			if (is.null(W)) {
+		if (is.null(Bspline_Z)) {
+			if (is.null(Z)) {
 				res = .Call("TwoPhase_MLE0_noZW_coxph", Y_vec, Delta_vec, X_mat, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
 			} else {
 				res = .Call("TwoPhase_MLE0_coxph", Y_vec, Delta_vec, X_mat, Z_mat, MAX_ITER, TOL, noSE, package="TwoPhaseReg")

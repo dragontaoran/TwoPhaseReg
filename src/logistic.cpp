@@ -1,4 +1,3 @@
-#include <boost/math/distributions/normal.hpp>
 #include <RcppEigen.h>
 #include <iostream>
 #include <ctime>
@@ -516,7 +515,6 @@ RcppExport SEXP TwoPhase_GeneralSpline_logistic (SEXP Y_R, SEXP X_R, SEXP ZW_R, 
 		VectorXd profile_vec(ncov);
 		MatrixXd logp(m, s);
 		MatrixXd profile_mat(ncov, ncov);
-		MatrixXd inv_profile_mat(ncov, ncov);
 		double loglik;
 		
 		profile_mat.setZero();
@@ -581,8 +579,7 @@ RcppExport SEXP TwoPhase_GeneralSpline_logistic (SEXP Y_R, SEXP X_R, SEXP ZW_R, 
 			}		
 			profile_mat /= hn*hn;
 			profile_mat = -profile_mat;
-			inv_profile_mat = profile_mat.selfadjointView<Eigen::Upper>().ldlt().solve(MatrixXd::Identity(ncov, ncov));
-			cov_theta = inv_profile_mat.topLeftCorner(ncov,ncov);
+			cov_theta = profile_mat.selfadjointView<Eigen::Upper>().ldlt().solve(MatrixXd::Identity(ncov, ncov));
 		}
 	}
 	/**** variance estimation **********************************************************************************************************************/
@@ -599,6 +596,54 @@ RcppExport SEXP TwoPhase_GeneralSpline_logistic (SEXP Y_R, SEXP X_R, SEXP ZW_R, 
 	/**** return output to R ***********************************************************************************************************************/
 	/*#############################################################################################################################################*/
 } // TwoPhase_GeneralSpline_logistic
+
+void WaldLogisticVarianceMLE0 (Ref<MatrixXd> cov_theta, const Ref<const MatrixXd>& LS_XtX, const Ref<const VectorXd>& p, const Ref<const MatrixXd>& logi_X_uni_theta,
+	const Ref<const VectorXd>& Y, const Ref<const MatrixXd>& ZW, const Ref<const MatrixXd>& X_uni, const Ref<const MatrixXd>& q, 
+	const int n_minus_n2, const int X_nc, const int ZW_nc, const int m, const int ncov, const int n, const int n2) 
+{
+	const int dimQ = ncov+m;
+
+	VectorXd l1i(dimQ);
+	VectorXd l1ik(dimQ);
+	MatrixXd Q(dimQ, dimQ);
+	MatrixXd resi(n_minus_n2, m);
+	MatrixXd inv_profile_mat(dimQ-1, dimQ-1);
+	int idx;
+		
+	/**** augment the upper diagonal of Q **********************************************************************************************************/	
+	// add l2 
+	Q.setZero();
+	Q.topLeftCorner(ncov,ncov) = LS_XtX;
+	for (int k=0; k<m; k++) {
+		Q(ncov+k,ncov+k) = (n+0.)/p(k);
+	}
+	
+	// add l1i, l1ik
+	for (int i=0; i<n_minus_n2; i++) {
+		idx = i+n2;
+		l1i.setZero();
+		for (int k=0; k<m; k++) {
+			l1ik.setZero();
+			l1ik.head(X_nc) = X_uni.row(k).transpose()*(Y(idx)-logi_X_uni_theta(i,k));
+			l1ik.segment(X_nc,ZW_nc) = ZW.row(idx).transpose()*(Y(idx)-logi_X_uni_theta(i,k));;
+			l1ik(ncov+k) = 1./p(k);
+			l1i += q(i,k)*l1ik;
+			Q -= q(i,k)*l1ik*l1ik.transpose();
+		}
+		Q += l1i*l1i.transpose();
+	}
+		
+	for (int k=0; k<m-1; k++) {
+		Q.block(0,ncov+k,ncov,1) -= Q.topRightCorner(ncov,1);
+		for (int kk=k; kk<m-1; kk++) {
+			Q(ncov+k,ncov+kk) -= Q(ncov+k,dimQ-1)+Q(ncov+kk,dimQ-1)-Q(dimQ-1,dimQ-1);
+		}
+	}
+	
+	/**** augment the upper diagonal of Q **********************************************************************************************************/		
+	inv_profile_mat = Q.topLeftCorner(dimQ-1,dimQ-1).selfadjointView<Eigen::Upper>().ldlt().solve(MatrixXd::Identity(dimQ-1, dimQ-1));
+	cov_theta = inv_profile_mat.topLeftCorner(ncov,ncov);	
+} // WaldLogisticVarianceMLE0
 
 RcppExport SEXP TwoPhase_MLE0_logistic (SEXP Y_R, SEXP X_R, SEXP ZW_R, SEXP MAX_ITER_R, SEXP TOL_R, SEXP noSE_R) 
 {
@@ -859,6 +904,7 @@ RcppExport SEXP TwoPhase_MLE0_logistic (SEXP Y_R, SEXP X_R, SEXP ZW_R, SEXP MAX_
 	} 
 	else 
 	{
+		WaldLogisticVarianceMLE0(cov_theta, LS_XtX, p, logi_X_uni_theta, Y, ZW, X_uni, q, n_minus_n2, X_nc, ZW_nc, m, ncov, n, n2);
 	}
 	/**** variance estimation **********************************************************************************************************************/
 	/*#############################################################################################################################################*/
