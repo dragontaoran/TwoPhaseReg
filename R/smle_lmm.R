@@ -7,7 +7,7 @@
 #' @param Z Specifies the columns of the inexpensive covariates. \code{Z} should be time-invariant. Subjects with missing values of \code{Z} are omitted from the analysis. This argument is optional.
 #' @param Bspline_Z Specifies the columns of the B-spline basis. Subjects with missing values of \code{Bspline_Z} are omitted from the analysis. This argument is not needed when \code{X} is independent of \code{Z}.
 #' @param data Specifies the name of the dataset. This argument is required.
-#' @param hn_scale Specifies the scale of the perturbation constant in the variance estimation. For example, if \code{hn_scale = 0.5}, then the perturbation constant is \eqn{0.5n^{-1/2}}, where \eqn{n} is the first-phase sample size. The default value is \code{1}. This argument is optional. It is not needed when there is no \code{Z}.
+#' @param hn_scale Specifies the scale of the perturbation constant in the variance estimation. For example, if \code{hn_scale = 0.5}, then the perturbation constant is \eqn{0.5n^{-1/2}}, where \eqn{n} is the number of observations in the first-phase. The default value is \code{1}. This argument is optional. It is not needed when there is no \code{Z}.
 #' @param MAX_ITER Specifies the maximum number of iterations in the EM algorithm. The default number is \code{2000}. This argument is optional.
 #' @param TOL Specifies the convergence criterion in the EM algorithm. The default value is \code{1E-4}. This argument is optional.
 #' @param noSE If \code{TRUE}, then the variances of the parameter estimators will not be estimated. The default value is \code{FALSE}. This argument is optional.
@@ -224,7 +224,7 @@ smle_lmm <- function (Y=NULL, Time=NULL, ID=NULL, X=NULL, Z=NULL, Bspline_Z=NULL
 		Z_nc = ncol(Z_mat)
 	}
 	
-	hn = hn_scale/sqrt(nid)
+	hn = hn_scale/sqrt(n)
 	#### prepare analysis #########################################################################################
 	###############################################################################################################
 	
