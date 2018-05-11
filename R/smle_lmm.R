@@ -217,14 +217,14 @@ smle_lmm <- function (Y=NULL, Time=NULL, ID=NULL, X=NULL, Z=NULL, Bspline_Z=NULL
 	X_nc = length(X)
 
 	if (is.null(Z)) {
-		Z_mat = rep(1., n)
+		Z_mat = rep(1., nid)
 		Z_nc = 1;
 	} else {
 		Z_mat = cbind(1, Z_mat)
 		Z_nc = ncol(Z_mat)
 	}
 	
-	hn = hn_scale/sqrt(n)
+	hn = hn_scale/sqrt(nid)
 	#### prepare analysis #########################################################################################
 	###############################################################################################################
 	
