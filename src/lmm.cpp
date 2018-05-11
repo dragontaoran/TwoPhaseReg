@@ -324,10 +324,12 @@ double LMM_GeneralSplineProfile (Ref<MatrixXd> pB, Ref<RowVectorXd> p_col_sum, R
 		
 		loglik += q_row_sum.array().log().sum();		
 		loglik -= log(2.*M_PI)*nobs/2.;
-		
-		for (int i=0; i<n2; i++)
+		for (int i=0; i<n; i++)
 		{
 			loglik -= log(V[i].determinant())/2.;
+		}		
+		for (int i=0; i<n2; i++)
+		{
 			loglik -= (resi2.segment(index_obs(i,0), index_obs(i,1)).transpose()*V_inv[i]*resi2.segment(index_obs(i,0), index_obs(i,1)))(0,0)/2.;
 		}
 		/**** calculate the likelihood *************************************************************************************************************/
