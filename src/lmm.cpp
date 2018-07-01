@@ -387,10 +387,10 @@ RcppExport SEXP LMM_GeneralSpline (SEXP Y_R, SEXP T_R, SEXP X_R, SEXP Z_R, SEXP 
 	const int nZ = 1+X_nc;
 	const int nT = nZ+Z_nc;
 	const int nXT = nT+1;
-	int nZT, ncov;
+	int ncov;
 	if (ZT)
 	{
-		nZT = nXT+X_nc;
+		const int nZT = nXT+X_nc;
 		ncov = nZT+Z_nc;
 	}
 	else
