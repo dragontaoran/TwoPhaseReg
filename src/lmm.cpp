@@ -387,17 +387,12 @@ RcppExport SEXP LMM_GeneralSpline (SEXP Y_R, SEXP T_R, SEXP X_R, SEXP Z_R, SEXP 
 	const int nZ = 1+X_nc;
 	const int nT = nZ+Z_nc;
 	const int nXT = nT+1;
-	int ncov;
+	const int nZT = nXT+X_nc;
+	int ncov = nZT;
 	if (ZT)
-	{
-		const int nZT = nXT+X_nc;
-		ncov = nZT+Z_nc;
-	}
-	else
-	{
-		ncov = nXT+X_nc;
-	}
-	
+	{		
+		ncov += Z_nc;
+	}	
 	const int s = Bspline.cols(); // number of B-spline functions
 	/**** some useful constants ********************************************************************************************************************/
 	/*#############################################################################################################################################*/	
