@@ -256,7 +256,7 @@ smle_lmm <- function (Y=NULL, Time=NULL, ID=NULL, X=NULL, Z=NULL, ZT=FALSE, Bspl
             vc_initial[3] = res0$varcor[[1]][2,2]
             vc_initial[4] = res0$sigma^2	            
 	    }
-		res = .Call("LMM_GeneralSpline", Y_vec, T_vec, X_mat, Z_mat, ZT, asBspline_Z_mat, index_obs, coef_initial, vc_initial, hn, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
+		res = .Call("LMM_GeneralSpline", Y_vec, T_vec, X_mat, Z_mat, ZT, Bspline_Z_mat, index_obs, coef_initial, vc_initial, hn, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
 	}
     #### analysis #################################################################################################
 	###############################################################################################################
@@ -281,13 +281,10 @@ smle_lmm <- function (Y=NULL, Time=NULL, ID=NULL, X=NULL, Z=NULL, ZT=FALSE, Bspl
 	res_vc[which(res_vc == -999)] = NA
 	
 	id_NA = which(is.na(res_coefficients[,1]) | is.na(res_coefficients[,2]))
-	if (length(id_NA) > 0)
-	{
+	if (length(id_NA) > 0) {
 	    res_coefficients[-id_NA,3] = res_coefficients[-id_NA,1]/res_coefficients[-id_NA,2]
 	    res_coefficients[-id_NA,4] = 1-pchisq(res_coefficients[-id_NA,3]^2, df=1)
-	}
-	else
-	{
+	} else {
 	    res_coefficients[,3] = res_coefficients[,1]/res_coefficients[,2]
 	    res_coefficients[,4] = 1-pchisq(res_coefficients[,3]^2, df=1)
 	}
