@@ -5,6 +5,7 @@
 #' @param ID Specifies the column of the subject ID. Subjects with missing values of \code{ID} are omitted from the analysis. This argument is required.
 #' @param X Specifies the columns of the expensive covariates. \code{X} should be time-invariant. Subjects with missing values of \code{X} are considered as those not selected in the second phase. This argument is required.
 #' @param Z Specifies the columns of the inexpensive covariates. \code{Z} should be time-invariant. Subjects with missing values of \code{Z} are omitted from the analysis. This argument is optional.
+#' @param ZT If \code{TRUE}, then include the interaction term between \code{Z} and \code{Time} as fixed effects. The default value is \code{FALSE}.
 #' @param Bspline_Z Specifies the columns of the B-spline basis. Subjects with missing values of \code{Bspline_Z} are omitted from the analysis. This argument is not needed when \code{X} is independent of \code{Z}.
 #' @param data Specifies the name of the dataset. This argument is required.
 #' @param hn_scale Specifies the scale of the perturbation constant in the variance estimation. For example, if \code{hn_scale = 0.5}, then the perturbation constant is \eqn{0.5n^{-1/2}}, where \eqn{n} is the number of observations in the first-phase. The default value is \code{1}. This argument is optional. It is not needed when there is no \code{Z}.
@@ -23,7 +24,7 @@
 #' @importFrom Rcpp evalCpp
 #' @importFrom stats pchisq
 #' @exportPattern "^[[:alpha:]]+"
-smle_lmm <- function (Y=NULL, Time=NULL, ID=NULL, X=NULL, Z=NULL, Bspline_Z=NULL, data=NULL, hn_scale=1, MAX_ITER=2000,
+smle_lmm <- function (Y=NULL, Time=NULL, ID=NULL, X=NULL, Z=NULL, ZT=FALSE, Bspline_Z=NULL, data=NULL, hn_scale=1, MAX_ITER=2000,
     TOL=1E-4, noSE=FALSE, verbose=FALSE, coef_initial=NULL, vc_initial=NULL) {
 
     ###############################################################################################################
@@ -31,6 +32,7 @@ smle_lmm <- function (Y=NULL, Time=NULL, ID=NULL, X=NULL, Z=NULL, Bspline_Z=NULL
     storage.mode(MAX_ITER) = "integer"
 	storage.mode(TOL) = "double"
 	storage.mode(noSE) = "integer"
+	storage.mode(ZT) = "integer"
 	
 	if (is.null(data)) {
 	    stop("No dataset is provided!")
@@ -211,18 +213,15 @@ smle_lmm <- function (Y=NULL, Time=NULL, ID=NULL, X=NULL, Z=NULL, Bspline_Z=NULL
 	if (!is.null(Z)) {
 		cov_names = c(cov_names, Z)
 	}
-	cov_names = c(cov_names, "Time", paste0("Time_", X))
+	cov_names = c(cov_names, "Time", paste0("Time:", X))
+	
+	if (!is.null(Z) & ZT) {
+	    cov_names = c(cov_names, paste0("Time:", Z))
+	} 
 	
 	ncov = length(cov_names)
 	X_nc = length(X)
-
-	if (is.null(Z)) {
-		Z_mat = rep(1., nid)
-		Z_nc = 1;
-	} else {
-		Z_mat = cbind(1, Z_mat)
-		Z_nc = ncol(Z_mat)
-	}
+	Z_nc = length(Z)
 	
 	hn = hn_scale/sqrt(n)
 	#### prepare analysis #########################################################################################
@@ -232,24 +231,32 @@ smle_lmm <- function (Y=NULL, Time=NULL, ID=NULL, X=NULL, Z=NULL, Bspline_Z=NULL
 	
 	###############################################################################################################
 	#### analysis #################################################################################################
-	require(lme4)
-
 	if (is.null(Bspline_Z)) {
 	} else {
 	    if (is.null(coef_initial) | is.null(vc_initial)) {
-	        res0_formula = as.formula(paste0(Y, "~", paste(Z, collapse="+"), "+", Time, "+(", Time, "|", ID, ")"))
+	        require(lme4)
+	        if (ZT) {
+	            res0_formula = as.formula(paste(Y, "~", paste(Z, collapse="+"), "+", Time, "+", paste(paste(Z, "*", Time), collapse="+"), "+(", Time, "|", ID, ")"))
+	        } else {
+	            res0_formula = as.formula(paste(Y, "~", paste(Z, collapse="+"), "+", Time, "+(", Time, "|", ID, ")"))
+	        }
 	        res0 = summary(lmer(formula=res0_formula, data=data, REML=FALSE))
-	        coef_initial = rep(NA, ncov)
-	        coef_initial[1:X_nc] = 0;
-	        coef_initial[(X_nc+1):(X_nc+Z_nc+1)] = coef(res0)[,1]
-	        coef_initial[(X_nc+Z_nc+2):(X_nc+Z_nc+1+X_nc)] = 0
-	        vc_initial = rep(NA, 4)
-	        vc_initial[1] = res0$varcor[[1]][1,1]
-	        vc_initial[2] = res0$varcor[[1]][1,2]
-	        vc_initial[3] = res0$varcor[[1]][2,2]
-	        vc_initial[4] = res0$sigma^2
+            coef_initial = rep(NA, ncov)
+            coef_initial[1] = coef(res0)[1,1]
+            coef_initial[2:(X_nc+1)] = 0
+            coef_initial[(X_nc+2):(X_nc+Z_nc+1)] = coef(res0)[2:(Z_nc+1),1]
+            coef_initial[(X_nc+Z_nc+2)] = coef(res0)[(Z_nc+2),1]
+            coef_initial[(X_nc+Z_nc+3):(2*X_nc+Z_nc+2)] = 0
+            if (ZT) {
+                coef_initial[(2*X_nc+Z_nc+3):(2*X_nc+2*Z_nc+2)] = coef(res0)[(Z_nc+3):(2*Z_nc+2),1]
+            }
+            vc_initial = rep(NA, 4)
+            vc_initial[1] = res0$varcor[[1]][1,1]
+            vc_initial[2] = res0$varcor[[1]][1,2]
+            vc_initial[3] = res0$varcor[[1]][2,2]
+            vc_initial[4] = res0$sigma^2	            
 	    }
-		res = .Call("LMM_GeneralSpline", Y_vec, T_vec, X_mat, Z_mat, Bspline_Z_mat, index_obs, coef_initial, vc_initial, hn, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
+		res = .Call("LMM_GeneralSpline", Y_vec, T_vec, X_mat, Z_mat, ZT, asBspline_Z_mat, index_obs, coef_initial, vc_initial, hn, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
 	}
     #### analysis #################################################################################################
 	###############################################################################################################
@@ -258,22 +265,16 @@ smle_lmm <- function (Y=NULL, Time=NULL, ID=NULL, X=NULL, Z=NULL, Bspline_Z=NULL
 
     ###############################################################################################################
     #### return results ###########################################################################################
-	
 	res_coefficients = matrix(NA, nrow=ncov, ncol=4)
 	colnames(res_coefficients) = c("Estimate", "SE", "Statistic", "p-value")
 	rownames(res_coefficients) = cov_names
-	
-	rowmap = rep(NA, ncov)
-	rowmap[1] = X_nc+1
-	rowmap[2:(X_nc+1)] = 1:X_nc
-	rowmap[(X_nc+2):ncov] = (X_nc+2):ncov
-	
+
 	res_vc = rep(NA, 4)
 	names(res_vc) = c("Intercept","Covariance","Slope","Residual Variance")
 	
- 	res_coefficients[,1] = res$theta[rowmap]
+ 	res_coefficients[,1] = res$theta
 	res_coefficients[which(res_coefficients[,1] == -999),1] = NA
-	res_coefficients[,2] = diag(res$cov_theta)[rowmap]
+	res_coefficients[,2] = diag(res$cov_theta)
 	res_coefficients[which(res_coefficients[,2] <= 0),2] = NA
 	res_coefficients[which(res_coefficients[,2] > 0),2] = sqrt(res_coefficients[which(res_coefficients[,2] > 0),2])
 	res_vc = res$vcparams
