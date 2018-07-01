@@ -673,14 +673,14 @@ RcppExport SEXP LMM_GeneralSpline (SEXP Y_R, SEXP T_R, SEXP X_R, SEXP Z_R, SEXP 
 			
 			if (ZT)
 			{
-				XinvVX(0, nZT, 1, Z_nc).noalias() += V_inv_1T(i)*Z.row(i);
+				XinvVX.block(0, nZT, 1, Z_nc).noalias() += V_inv_1T(i)*Z.row(i);
 				XinvVX.block(1, nZT, X_nc, Z_nc).noalias() += V_inv_1T(i)*X.row(i).transpose()*Z.row(i);
 				XinvVX.block(nZ, nZT, Z_nc, Z_nc).noalias() += V_inv_1T(i)*Z.row(i).transpose()*Z.row(i);
 				XinvVX.block(nT, nZT, 1, Z_nc).noalias() += V_inv_TT(i)*Z.row(i);
 				XinvVX.block(nXT, nZT, X_nc, Z_nc).noalias() += V_inv_TT(i)*X.row(i).transpose()*Z.row(i);
 				XinvVX.block(nZT, nZT, Z_nc, Z_nc).noalias() += V_inv_TT(i)*Z.row(i).transpose()*Z.row(i);
 				
-				XinvVY.block(nZT, Z_nc).noalias() += V_inv_TY*Z.row(i).transpose();
+				XinvVY.segment(nZT, Z_nc).noalias() += V_inv_TY*Z.row(i).transpose();
 			}
 		}
 
@@ -709,7 +709,7 @@ RcppExport SEXP LMM_GeneralSpline (SEXP Y_R, SEXP T_R, SEXP X_R, SEXP Z_R, SEXP 
 			
 			if (ZT) 
 			{
-				XinvVX.block(0, nZT, 1, Z_nc).noalias() += V_inv_1T(idx)*Z_row(idx);
+				XinvVX.block(0, nZT, 1, Z_nc).noalias() += V_inv_1T(idx)*Z.row(idx);
 				XinvVX.block(nZ, nZT, Z_nc, Z_nc).noalias() += V_inv_1T(idx)*Z.row(idx).transpose()*Z.row(idx);
 				XinvVX.block(nT, nZT, 1, Z_nc).noalias() += V_inv_TT(idx)*Z.row(idx);
 				XinvVX.block(nZT, nZT, Z_nc, Z_nc).noalias() += V_inv_TT(idx)*Z.row(idx).transpose()*Z.row(idx);
