@@ -387,14 +387,15 @@ RcppExport SEXP LMM_GeneralSpline (SEXP Y_R, SEXP T_R, SEXP X_R, SEXP Z_R, SEXP 
 	const int nZ = 1+X_nc;
 	const int nT = nZ+Z_nc;
 	const int nXT = nT+1;
+	int nZT, ncov;
 	if (ZT)
 	{
-		const int nZT = nXT+X_nc;
-		const int ncov = nZT+Z_nc;
+		nZT = nXT+X_nc;
+		ncov = nZT+Z_nc;
 	}
 	else
 	{
-		const int ncov = nXT+X_nc;
+		ncov = nXT+X_nc;
 	}
 	
 	const int s = Bspline.cols(); // number of B-spline functions
@@ -504,9 +505,10 @@ RcppExport SEXP LMM_GeneralSpline (SEXP Y_R, SEXP T_R, SEXP X_R, SEXP Z_R, SEXP 
 	VectorXd Z_theta(n);
 	VectorXd X_uni_theta(m);
 	VectorXd TX_uni_theta(m);
+	VectorXd TZ_theta;
 	if (ZT)
 	{
-		VectorXd TZ_theta(n);
+		TZ_theta.resize(n);
 	}
 	VectorXd L_var(4);
 	MatrixXd I_var(4, 4);
