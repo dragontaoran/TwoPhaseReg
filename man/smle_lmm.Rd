@@ -5,9 +5,9 @@
 \title{Performs efficient semiparametric estimation for linear mixed models with longitudinal continuous outcomes under general two-phase designs.}
 \usage{
 smle_lmm(Y = NULL, Time = NULL, ID = NULL, X = NULL, Z = NULL,
-  Bspline_Z = NULL, data = NULL, hn_scale = 1, MAX_ITER = 2000,
-  TOL = 1e-04, noSE = FALSE, verbose = FALSE, coef_initial = NULL,
-  vc_initial = NULL)
+  ZT = FALSE, Bspline_Z = NULL, data = NULL, hn_scale = 1,
+  MAX_ITER = 2000, TOL = 1e-04, noSE = FALSE, verbose = FALSE,
+  coef_initial = NULL, vc_initial = NULL)
 }
 \arguments{
 \item{Y}{Specifies the column of the longitudinal continuous outcome. Observations with missing values of \code{Y} are omitted from the analysis. This argument is required.}
@@ -20,11 +20,13 @@ smle_lmm(Y = NULL, Time = NULL, ID = NULL, X = NULL, Z = NULL,
 
 \item{Z}{Specifies the columns of the inexpensive covariates. \code{Z} should be time-invariant. Subjects with missing values of \code{Z} are omitted from the analysis. This argument is optional.}
 
+\item{ZT}{If \code{TRUE}, then include the interaction term between \code{Z} and \code{Time} as fixed effects. The default value is \code{FALSE}.}
+
 \item{Bspline_Z}{Specifies the columns of the B-spline basis. Subjects with missing values of \code{Bspline_Z} are omitted from the analysis. This argument is not needed when \code{X} is independent of \code{Z}.}
 
 \item{data}{Specifies the name of the dataset. This argument is required.}
 
-\item{hn_scale}{Specifies the scale of the perturbation constant in the variance estimation. For example, if \code{hn_scale = 0.5}, then the perturbation constant is \eqn{0.5n^{-1/2}}, where \eqn{n} is the first-phase sample size. The default value is \code{1}. This argument is optional. It is not needed when there is no \code{Z}.}
+\item{hn_scale}{Specifies the scale of the perturbation constant in the variance estimation. For example, if \code{hn_scale = 0.5}, then the perturbation constant is \eqn{0.5n^{-1/2}}, where \eqn{n} is the number of observations in the first-phase. The default value is \code{1}. This argument is optional. It is not needed when there is no \code{Z}.}
 
 \item{MAX_ITER}{Specifies the maximum number of iterations in the EM algorithm. The default number is \code{2000}. This argument is optional.}
 
@@ -36,11 +38,11 @@ smle_lmm(Y = NULL, Time = NULL, ID = NULL, X = NULL, Z = NULL,
 
 \item{coef_initial}{Specifies the initial values of the fixed effects. \code{coef_initial} should be a numerical vector. The elements of \code{coef_initial} should follow the order of expensive covariates, intercept, inexpensive covariates (if any), time, and interactions between expensive covariates and time. This argument is optional. If this argument is not specified, then the maximum likelihood estimates from the null model without the expensive covariates will be used as initial values.}
 
-\item{vc_initial}{Specifies the initial values of the variance component parameters. \code{vc_initial} should be a numerical vector of length \code{4}. The elements of \code{vc_initial} should follow the order of varaince of random intercept, covariance between random intercept and random slope of time, variance of random slope of time, and variance of the residual error term. This argument is optional. If this argument is not specified, then the maximum likelihood estimates from the null model without the expensive covariates will be used as initial values.}
+\item{vc_initial}{Specifies the initial values of the variance component parameters. \code{vc_initial} should be a numerical vector of length \code{4}. The elements of \code{vc_initial} should follow the order of variance of random intercept, covariance between random intercept and random slope of time, variance of random slope of time, and variance of the residual error term. This argument is optional. If this argument is not specified, then the maximum likelihood estimates from the null model without the expensive covariates will be used as initial values.}
 }
 \value{
 \item{coefficients}{Stores the fixed effects estimates.}
-\item{vc}{Stores the varaince component estimates.}
+\item{vc}{Stores the variance component estimates.}
 \item{converge}{In parameter estimation, if the EM algorithm converges, then \code{converge = TRUE}. Otherwise, \code{converge = FALSE}.}
 \item{converge2}{In variance estimation, if the EM algorithm converges, then \code{converge2 = TRUE}. Otherwise, \code{converge2 = FALSE}.}
 }

@@ -14,15 +14,16 @@
 #' @param noSE If \code{TRUE}, then the variances of the parameter estimators will not be estimated. The default value is \code{FALSE}. This argument is optional.
 #' @param verbose If \code{TRUE}, then show details of the analysis. The default value is \code{FALSE}.
 #' @param coef_initial Specifies the initial values of the fixed effects. \code{coef_initial} should be a numerical vector. The elements of \code{coef_initial} should follow the order of expensive covariates, intercept, inexpensive covariates (if any), time, and interactions between expensive covariates and time. This argument is optional. If this argument is not specified, then the maximum likelihood estimates from the null model without the expensive covariates will be used as initial values.
-#' @param vc_initial Specifies the initial values of the variance component parameters. \code{vc_initial} should be a numerical vector of length \code{4}. The elements of \code{vc_initial} should follow the order of varaince of random intercept, covariance between random intercept and random slope of time, variance of random slope of time, and variance of the residual error term. This argument is optional. If this argument is not specified, then the maximum likelihood estimates from the null model without the expensive covariates will be used as initial values.
+#' @param vc_initial Specifies the initial values of the variance component parameters. \code{vc_initial} should be a numerical vector of length \code{4}. The elements of \code{vc_initial} should follow the order of variance of random intercept, covariance between random intercept and random slope of time, variance of random slope of time, and variance of the residual error term. This argument is optional. If this argument is not specified, then the maximum likelihood estimates from the null model without the expensive covariates will be used as initial values.
 #' @return
 #' \item{coefficients}{Stores the fixed effects estimates.}
-#' \item{vc}{Stores the varaince component estimates.}
+#' \item{vc}{Stores the variance component estimates.}
 #' \item{converge}{In parameter estimation, if the EM algorithm converges, then \code{converge = TRUE}. Otherwise, \code{converge = FALSE}.}
 #' \item{converge2}{In variance estimation, if the EM algorithm converges, then \code{converge2 = TRUE}. Otherwise, \code{converge2 = FALSE}.}
-#' @useDynLib TwoPhaseReg
+#' @useDynLib TwoPhaseReg,.registration = TRUE
 #' @importFrom Rcpp evalCpp
-#' @importFrom stats pchisq
+#' @importFrom stats pchisq as.formula coef
+#' @importFrom lme4 lmer
 #' @exportPattern "^[[:alpha:]]+"
 smle_lmm <- function (Y=NULL, Time=NULL, ID=NULL, X=NULL, Z=NULL, ZT=FALSE, Bspline_Z=NULL, data=NULL, hn_scale=1, MAX_ITER=2000,
     TOL=1E-4, noSE=FALSE, verbose=FALSE, coef_initial=NULL, vc_initial=NULL) {
@@ -234,7 +235,6 @@ smle_lmm <- function (Y=NULL, Time=NULL, ID=NULL, X=NULL, Z=NULL, ZT=FALSE, Bspl
 	if (is.null(Bspline_Z)) {
 	} else {
 	    if (is.null(coef_initial) | is.null(vc_initial)) {
-	        require(lme4)
 	        if (ZT) {
 	            res0_formula = as.formula(paste(Y, "~", paste(Z, collapse="+"), "+", Time, "+", paste(paste(Z, "*", Time), collapse="+"), "+(", Time, "|", ID, ")"))
 	        } else {

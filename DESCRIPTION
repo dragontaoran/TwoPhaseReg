@@ -6,9 +6,8 @@ Author: Ran Tao <r.tao@vanderbilt.edu>
 Maintainer: Ran Tao <r.tao@vanderbilt.edu>
 Description: Efficient regression analysis under general two-phase, outcome-dependent sampling.
 License: GPL (>= 2)
-Imports:
-    Rcpp, lme4
+Depends: lme4
+Imports: Rcpp 
 LinkingTo: Rcpp, RcppEigen, BH
-Suggests:
-	splines
+Suggests: splines
 RoxygenNote: 6.0.1
