@@ -4,8 +4,10 @@
 #' @param Y Specifies the column that stores the validated value of \code{Y_tilde} in the second phase. Subjects with missing values of \code{Y} are considered as those not selected in the second phase. This argument is required.
 #' @param X_tilde Specifies the columns of the error-prone covariates. Subjects with missing values of \code{X_tilde} are omitted from the analysis. This argument is required.
 #' @param X Specifies the columns that store the validated values of \code{X_tilde} in the second phase. Subjects with missing values of \code{X} are considered as those not selected in the second phase. This argument is required.
+#' @param Bspline Specifies the columns of the B-spline basis. Subjects with missing values of \code{Bspline} are omitted from the analysis. This argument is required. 
 #' @param Z Specifies the columns of the accurately measured covariates. Subjects with missing values of \code{Z} are omitted from the analysis. This argument is optional. 
 #' @param data Specifies the name of the dataset. This argument is required.
+#' @param hn_scale Specifies the scale of the perturbation constant in the variance estimation. For example, if \code{hn_scale = 0.5}, then the perturbation constant is \eqn{0.5n^{-1/2}}, where \eqn{n} is the first-phase sample size. The default value is \code{1}. This argument is optional.
 #' @param MAX_ITER Specifies the maximum number of iterations in the EM algorithm. The default number is \code{2000}. This argument is optional.
 #' @param TOL Specifies the convergence criterion in the EM algorithm. The default value is \code{1E-4}. This argument is optional.
 #' @param noSE If \code{TRUE}, then the variances of the parameter estimators will not be estimated. The default value is \code{FALSE}. This argument is optional.
@@ -18,7 +20,7 @@
 #' @importFrom Rcpp evalCpp
 #' @importFrom stats pchisq
 #' @exportPattern "^[[:alpha:]]+"
-smle_MEXY <- function (Y_tilde=NULL, Y=NULL, X_tilde=NULL, X=NULL, Z=NULL, data=NULL, MAX_ITER=2000, TOL=1E-4, noSE=FALSE, verbose=FALSE) {
+smle_MEXY <- function (Y_tilde=NULL, Y=NULL, X_tilde=NULL, X=NULL, Z=NULL, Bspline=NULL, data=NULL, hn_scale=1, MAX_ITER=2000, TOL=1E-4, noSE=FALSE, verbose=FALSE) {
 
     ###############################################################################################################
     #### check data ###############################################################################################
@@ -40,7 +42,13 @@ smle_MEXY <- function (Y_tilde=NULL, Y=NULL, X_tilde=NULL, X=NULL, Z=NULL, data=
 		stop("The error-prone covariates X_tilde is not specified!")
 	} else {
 		vars_ph1 = c(vars_ph1, X_tilde)
-	}		
+	}
+
+	if (is.null(Bspline)) {
+	    stop("The B-spline basis is not specified!")
+	} else {
+	    vars_ph1 = c(vars_ph1, Bspline)
+	}
 
 	if (is.null(Y)) {
 		stop("The accurately measured response Y is not specified!")
@@ -89,12 +97,15 @@ smle_MEXY <- function (Y_tilde=NULL, Y=NULL, X_tilde=NULL, X=NULL, Z=NULL, data=
 	
 	
 	###############################################################################################################
-	#### prepare analysis##########################################################################################	
+	#### prepare analysis #########################################################################################	
     Y_tilde_vec = c(as.vector(data[-id_phase1,Y_tilde]), as.vector(data[id_phase1,Y_tilde]))
 	storage.mode(Y_tilde_vec) = "double"
 	
 	X_tilde_mat = rbind(as.matrix(data[-id_phase1,X_tilde]), as.matrix(data[id_phase1,X_tilde]))
 	storage.mode(X_tilde_mat) = "double"
+	
+	Bspline_mat = rbind(as.matrix(data[-id_phase1,Bspline]), as.matrix(data[id_phase1,Bspline]))
+	storage.mode(Bspline_mat) = "double"
 	
 	Y_vec = as.vector(data[-id_phase1,Y])
 	storage.mode(Y_vec) = "double"
@@ -129,14 +140,16 @@ smle_MEXY <- function (Y_tilde=NULL, Y=NULL, X_tilde=NULL, X=NULL, Z=NULL, data=
 		rowmap[2:(X_nc+1)] = 1:X_nc
 		rowmap[(X_nc+2):ncov] = (X_nc+2):ncov
 	}
-	#### prepare analysis##########################################################################################
+	
+	hn = hn_scale/sqrt(n)
+	#### prepare analysis #########################################################################################
 	###############################################################################################################
 	
 
 	
 	###############################################################################################################
 	#### analysis #################################################################################################
-	res = .Call("TwoPhase_MLE0_MEXY", Y_tilde_vec, X_tilde_mat, Y_vec, X_mat, Z_mat, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
+	res = .Call("TwoPhase_MLE0_MEXY", Y_tilde_vec, X_tilde_mat, Y_vec, X_mat, Z_mat, Bspline_mat, hn, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
     #### analysis #################################################################################################
 	###############################################################################################################
 	
