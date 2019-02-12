@@ -207,10 +207,10 @@ smle_MEXY <- function (Y_tilde=NULL, Y=NULL, X_tilde=NULL, X=NULL, Z=NULL, Bspli
 	    }
 	    
 	    res_coefficients[,1] = B+A%*%res_coefficients[,1]
-	    rescov = A%*%rescov%*%t(A)
+	    res_cov = A%*%res_cov%*%t(A)
 	}
 	
-	res_coefficients[,2] = diag(rescov)
+	res_coefficients[,2] = diag(res_cov)
 	res_coefficients[which(res_coefficients[,2] > 0),2] = sqrt(res_coefficients[which(res_coefficients[,2] > 0),2])
 	
 	id_NA = which(is.na(res_coefficients[,1]) | is.na(res_coefficients[,2]))
