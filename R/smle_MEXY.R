@@ -148,7 +148,7 @@ smle_MEXY <- function (Y_tilde=NULL, Y=NULL, X_tilde=NULL, X=NULL, Z=NULL, Bspli
 	
 	hn = hn_scale/sqrt(n)
 	
-	if (standardize = TRUE) {
+	if (standardize == TRUE) {
 	    my = mean(Y_tilde_vec)
 	    sy = sd(Y_tilde_vec)
 	    Y_tilde_vec = (Y_tilde_vec-my)/sy
@@ -164,8 +164,8 @@ smle_MEXY <- function (Y_tilde=NULL, Y=NULL, X_tilde=NULL, X=NULL, Z=NULL, Bspli
 	    if (!is.null(Z)) {
 	        mz = colMeans(Z_mat[,-1])
 	        sz = apply(Z_mat[,-1], 2, sd)
-	        Z_nc = length(Z_nc)
-	        for (i in 1:Z_nc) {
+	        Z_nc = length(Z)
+	        for (i in 2:(Z_nc+1)) {
 	            Z_mat[,i] = (Z_mat[,i]-mz[i])/sz[i]
 	        }
 	    }
@@ -190,7 +190,7 @@ smle_MEXY <- function (Y_tilde=NULL, Y=NULL, X_tilde=NULL, X=NULL, Z=NULL, Bspli
 	res_cov = res$cov_theta[rowmap, rowmap]
 	res_cov[which(res_cov == -999)] = NA
 	
-	if(standardize = TRUE) {
+	if(standardize == TRUE) {
 	    A = matrix(0, ncov, ncov)
 	    B = rep(0, ncov)
 	    
