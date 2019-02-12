@@ -12,8 +12,10 @@
 #' @param TOL Specifies the convergence criterion in the EM algorithm. The default value is \code{1E-4}. This argument is optional.
 #' @param noSE If \code{TRUE}, then the variances of the parameter estimators will not be estimated. The default value is \code{FALSE}. This argument is optional.
 #' @param verbose If \code{TRUE}, then show details of the analysis. The default value is \code{FALSE}.
+#' @param standardize If \code{TRUE}, then standardize the outcome and covariates during computation, which may help stabilizing standard error estimation. The default value is \code{FALSE}.
 #' @return
 #' \item{coefficients}{Stores the analysis results.}
+#' \item{covariance}{Stores the covariance matrix of the regression coefficient estimates.}
 #' \item{converge}{In parameter estimation, if the EM algorithm converges, then \code{converge = TRUE}. Otherwise, \code{converge = FALSE}.}
 #' \item{converge2}{In variance estimation, if the EM algorithm converges, then \code{converge2 = TRUE}. Otherwise, \code{converge2 = FALSE}.}
 #' @useDynLib TwoPhaseReg
@@ -129,6 +131,9 @@ smle_MEXY <- function (Y_tilde=NULL, Y=NULL, X_tilde=NULL, X=NULL, Z=NULL, Bspli
 	res_coefficients = matrix(NA, nrow=ncov, ncol=4)
 	colnames(res_coefficients) = c("Estimate", "SE", "Statistic", "p-value")
 	rownames(res_coefficients) = cov_names
+	res_cov = matrix(NA, nrow=ncov, ncol=ncov)
+	colnames(res_cov) = cov_names
+	rownames(res_cov) = cov_names
 	
 	if (is.null(Z)) {
 		Z_mat = rep(1., n)
@@ -142,6 +147,29 @@ smle_MEXY <- function (Y_tilde=NULL, Y=NULL, X_tilde=NULL, X=NULL, Z=NULL, Bspli
 	}
 	
 	hn = hn_scale/sqrt(n)
+	
+	if (standardize = TRUE) {
+	    my = mean(Y_tilde_vec)
+	    sy = sd(Y_tilde_vec)
+	    Y_tilde_vec = (Y_tilde_vec-my)/sy
+	    Y_vec = (Y_vec-my)/sy
+	    
+	    mx = colMeans(X_tilde_mat)
+	    sx = apply(X_tilde_mat, 2, sd)
+	    for (i in 1:X_nc) {
+	        X_tilde_mat[,i] = (X_tilde_mat[i]-mx[i])/sx[i]
+	        X_mat[,i] = (X_mat[i]-mx[i])/sx[i]
+	    }
+	    
+	    if (!is.null(Z)) {
+	        mz = colMeans(Z_mat[,-1])
+	        sz = apply(Z_mat[,-1], 2, sd)
+	        Z_nc = length(Z_nc)
+	        for (i in 1:Z_nc) {
+	            Z_mat[,i] = (Z_mat[,i]-mz[i])/sz[i]
+	        }
+	    }
+	}
 	#### prepare analysis #########################################################################################
 	###############################################################################################################
 	
@@ -159,8 +187,30 @@ smle_MEXY <- function (Y_tilde=NULL, Y=NULL, X_tilde=NULL, X=NULL, Z=NULL, Bspli
     #### return results ###########################################################################################
  	res_coefficients[,1] = res$theta[rowmap]
 	res_coefficients[which(res_coefficients[,1] == -999),1] = NA
-	res_coefficients[,2] = diag(res$cov_theta)[rowmap]
-	res_coefficients[which(res_coefficients[,2] <= 0),2] = NA
+	res_cov = res$cov_theta[rowmap, rowmap]
+	res_cov[which(res_cov == -999)] = NA
+	
+	if(standardize = TRUE) {
+	    A = matrix(0, ncov, ncov)
+	    B = rep(0, ncov)
+	    
+	    sy_x = sy/sx 
+	    diag(A)[2:(X_nc+1)] = sy_x
+	    A[1,2:(X_nc+1)] = -sy_x*mx
+	    A[1,1] = sy
+	    B[1] = my
+	    
+	    if (!is.null(Z)) {
+	        sy_z = sy/sz
+	        A[1,(X_nc+2):ncov] = -sy_z*mz
+	        diag(A)[(X_nc+2):ncov] = sy_z
+	    }
+	    
+	    res_coefficients[,1] = B+A%*%res_coefficients[,1]
+	    rescov = A%*%rescov%*%t(A)
+	}
+	
+	res_coefficients[,2] = diag(rescov)
 	res_coefficients[which(res_coefficients[,2] > 0),2] = sqrt(res_coefficients[which(res_coefficients[,2] > 0),2])
 	
 	id_NA = which(is.na(res_coefficients[,1]) | is.na(res_coefficients[,2]))
@@ -174,7 +224,7 @@ smle_MEXY <- function (Y_tilde=NULL, Y=NULL, X_tilde=NULL, X=NULL, Z=NULL, Bspli
 	    res_coefficients[,3] = res_coefficients[,1]/res_coefficients[,2]
 	    res_coefficients[,4] = 1-pchisq(res_coefficients[,3]^2, df=1)
 	}
-	res_final = list(coefficients=res_coefficients, converge=!res$flag_nonconvergence, converge2=!res$flag_nonconvergence_cov)
+	res_final = list(coefficients=res_coefficients, covariance=res_cov, converge=!res$flag_nonconvergence, converge2=!res$flag_nonconvergence_cov)
 	res_final
     #### return results ###########################################################################################
     ###############################################################################################################
