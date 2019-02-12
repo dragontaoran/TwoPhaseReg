@@ -12,7 +12,6 @@
 #' @param TOL Specifies the convergence criterion in the EM algorithm. The default value is \code{1E-4}. This argument is optional.
 #' @param noSE If \code{TRUE}, then the variances of the parameter estimators will not be estimated. The default value is \code{FALSE}. This argument is optional.
 #' @param verbose If \code{TRUE}, then show details of the analysis. The default value is \code{FALSE}.
-#' @param standardize If \code{TRUE}, then standardize the outcome and covariates during computation, which may help stabilizing standard error estimation. The default value is \code{FALSE}.
 #' @return
 #' \item{coefficients}{Stores the analysis results.}
 #' \item{covariance}{Stores the covariance matrix of the regression coefficient estimates.}
@@ -22,7 +21,7 @@
 #' @importFrom Rcpp evalCpp
 #' @importFrom stats pchisq
 #' @exportPattern "^[[:alpha:]]+"
-smle_MEXY <- function (Y_tilde=NULL, Y=NULL, X_tilde=NULL, X=NULL, Z=NULL, Bspline=NULL, data=NULL, hn_scale=1, MAX_ITER=2000, TOL=1E-4, noSE=FALSE, verbose=FALSE, standardize=FALSE) {
+smle_MEXY <- function (Y_tilde=NULL, Y=NULL, X_tilde=NULL, X=NULL, Z=NULL, Bspline=NULL, data=NULL, hn_scale=1, MAX_ITER=2000, TOL=1E-4, noSE=FALSE, verbose=FALSE) {
 
     ###############################################################################################################
     #### check data ###############################################################################################
@@ -147,29 +146,6 @@ smle_MEXY <- function (Y_tilde=NULL, Y=NULL, X_tilde=NULL, X=NULL, Z=NULL, Bspli
 	}
 	
 	hn = hn_scale/sqrt(n)
-	
-	if (standardize == TRUE) {
-	    my = mean(Y_tilde_vec)
-	    sy = sd(Y_tilde_vec)
-	    Y_tilde_vec = (Y_tilde_vec-my)/sy
-	    Y_vec = (Y_vec-my)/sy
-	    
-	    mx = colMeans(X_tilde_mat)
-	    sx = apply(X_tilde_mat, 2, sd)
-	    for (i in 1:X_nc) {
-	        X_tilde_mat[,i] = (X_tilde_mat[i]-mx[i])/sx[i]
-	        X_mat[,i] = (X_mat[i]-mx[i])/sx[i]
-	    }
-	    
-	    if (!is.null(Z)) {
-	        mz = colMeans(Z_mat[,-1])
-	        sz = apply(Z_mat[,-1], 2, sd)
-	        Z_nc = length(Z)
-	        for (i in 2:(Z_nc+1)) {
-	            Z_mat[,i] = (Z_mat[,i]-mz[i])/sz[i]
-	        }
-	    }
-	}
 	#### prepare analysis #########################################################################################
 	###############################################################################################################
 	
