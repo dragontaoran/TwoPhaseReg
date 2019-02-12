@@ -189,26 +189,7 @@ smle_MEXY <- function (Y_tilde=NULL, Y=NULL, X_tilde=NULL, X=NULL, Z=NULL, Bspli
 	res_coefficients[which(res_coefficients[,1] == -999),1] = NA
 	res_cov = res$cov_theta[rowmap, rowmap]
 	res_cov[which(res_cov == -999)] = NA
-	
-	if(standardize == TRUE) {
-	    A = matrix(0, ncov, ncov)
-	    B = rep(0, ncov)
-	    
-	    sy_x = sy/sx 
-	    diag(A)[2:(X_nc+1)] = sy_x
-	    A[1,2:(X_nc+1)] = -sy_x*mx
-	    A[1,1] = sy
-	    B[1] = my
-	    
-	    if (!is.null(Z)) {
-	        sy_z = sy/sz
-	        A[1,(X_nc+2):ncov] = -sy_z*mz
-	        diag(A)[(X_nc+2):ncov] = sy_z
-	    }
-	    
-	    res_coefficients[,1] = B+A%*%res_coefficients[,1]
-	    res_cov = A%*%res_cov%*%t(A)
-	}
+	diag(res_cov)[which(diag(res_cov) < 0)] = NA
 	
 	res_coefficients[,2] = diag(res_cov)
 	res_coefficients[which(res_coefficients[,2] > 0),2] = sqrt(res_coefficients[which(res_coefficients[,2] > 0),2])
