@@ -14,6 +14,7 @@
 #' @param verbose If \code{TRUE}, then show details of the analysis. The default value is \code{FALSE}.
 #' @return
 #' \item{coefficients}{Stores the analysis results.}
+#' \item{sigma}{Stores the residual standard error.}
 #' \item{covariance}{Stores the covariance matrix of the regression coefficient estimates.}
 #' \item{converge}{In parameter estimation, if the EM algorithm converges, then \code{converge = TRUE}. Otherwise, \code{converge = FALSE}.}
 #' \item{converge2}{In variance estimation, if the EM algorithm converges, then \code{converge2 = TRUE}. Otherwise, \code{converge2 = FALSE}.}
@@ -181,7 +182,7 @@ smle_MEXY <- function (Y_tilde=NULL, Y=NULL, X_tilde=NULL, X=NULL, Z=NULL, Bspli
 	    res_coefficients[,3] = res_coefficients[,1]/res_coefficients[,2]
 	    res_coefficients[,4] = 1-pchisq(res_coefficients[,3]^2, df=1)
 	}
-	res_final = list(coefficients=res_coefficients, covariance=res_cov, converge=!res$flag_nonconvergence, converge2=!res$flag_nonconvergence_cov)
+	res_final = list(coefficients=res_coefficients, sigma=sqrt(res$sigma_sq), covariance=res_cov, converge=!res$flag_nonconvergence, converge2=!res$flag_nonconvergence_cov)
 	res_final
     #### return results ###########################################################################################
     ###############################################################################################################
