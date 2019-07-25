@@ -24,7 +24,7 @@ double LMM_GeneralSplineProfile (Ref<MatrixXd> pB, Ref<RowVectorXd> p_col_sum, R
 	const Ref<const MatrixXd>& Z, const Ref<const MatrixXd>& X_uni, const Ref<const VectorXi>& X_uni_ind, 
 	const Ref<const VectorXi>& Bspline_uni_ind, const Ref<const MatrixXd>& p_static, const int n, const int n2, const int m, 
 	const int s, const int n_minus_n2, const int nobs, const int nobs2, const int X_nc, const int Z_nc, const int nT, const int MAX_ITER, 
-	const double TOL, const int nZ, const int nXT, const int ZT)
+	const double TOL, const int nZ, const int nXT, const bool ZT_flag, const int ZT_nc, const Ref<const MatrixXd>& ZT)
 {
 	/**** temporary variables **********************************************************************************************************************/
 	double tol, V_inv_1R, V_inv_TR, V_inv_R2;
@@ -52,9 +52,9 @@ double LMM_GeneralSplineProfile (Ref<MatrixXd> pB, Ref<RowVectorXd> p_col_sum, R
 	X_uni_theta = X_uni*theta.segment(1, X_nc);
 	Z_theta = Z*theta.segment(nZ, Z_nc);
 	TX_uni_theta = X_uni*theta.segment(nXT, X_nc);
-	if (ZT)
+	if (ZT_flag)
 	{
-		TZ_theta = Z*theta.tail(Z_nc);
+		TZ_theta = ZT*theta.tail(ZT_nc);
 	}
 	for (int i=0; i<n2; i++)
 	{
@@ -62,7 +62,7 @@ double LMM_GeneralSplineProfile (Ref<MatrixXd> pB, Ref<RowVectorXd> p_col_sum, R
 		resi2.segment(index_obs(i,0), index_obs(i,1)).array() -= theta(0)+X_uni_theta(X_uni_ind(i))+Z_theta(i);
 		resi2.segment(index_obs(i,0), index_obs(i,1)).noalias() -= T.segment(index_obs(i,0), index_obs(i,1))*theta(nT);
 		resi2.segment(index_obs(i,0), index_obs(i,1)).noalias() -= T.segment(index_obs(i,0), index_obs(i,1))*TX_uni_theta(X_uni_ind(i));
-		if (ZT)
+		if (ZT_flag)
 		{
 			resi2.segment(index_obs(i,0), index_obs(i,1)).noalias() -= T.segment(index_obs(i,0), index_obs(i,1))*TZ_theta(i);
 		}
@@ -74,7 +74,7 @@ double LMM_GeneralSplineProfile (Ref<MatrixXd> pB, Ref<RowVectorXd> p_col_sum, R
 		resi.block(idxx, 0, index_obs(idx,1), 1) = Y.segment(index_obs(idx,0), index_obs(idx,1));
 		resi.block(idxx, 0, index_obs(idx,1), 1).array() -= theta(0)+Z_theta(idx);
 		resi.block(idxx, 0, index_obs(idx,1), 1).noalias() -= T.segment(index_obs(idx,0), index_obs(idx,1))*theta(nT);
-		if (ZT)
+		if (ZT_flag)
 		{
 			resi.block(idxx, 0, index_obs(idx,1), 1).noalias() -= T.segment(index_obs(idx,0), index_obs(idx,1))*TZ_theta(idx);
 		}		
@@ -352,7 +352,7 @@ double LMM_GeneralSplineProfile (Ref<MatrixXd> pB, Ref<RowVectorXd> p_col_sum, R
 	}
 } // LMM_GeneralSplineProfile
 
-RcppExport SEXP LMM_GeneralSpline (SEXP Y_R, SEXP T_R, SEXP X_R, SEXP Z_R, SEXP ZT_R, SEXP Bspline_R, SEXP index_obs_R, SEXP coef_initial_R, SEXP vc_initial_R, SEXP hn_R, SEXP MAX_ITER_R, SEXP TOL_R, SEXP noSE_R) 
+RcppExport SEXP LMM_GeneralSpline (SEXP Y_R, SEXP T_R, SEXP X_R, SEXP Z_R, SEXP ZT_colid_R, SEXP Bspline_R, SEXP index_obs_R, SEXP coef_initial_R, SEXP vc_initial_R, SEXP hn_R, SEXP MAX_ITER_R, SEXP TOL_R, SEXP noSE_R) 
 {
 	/*#############################################################################################################################################*/
 	/**** pass arguments from R to cpp *************************************************************************************************************/
@@ -360,7 +360,7 @@ RcppExport SEXP LMM_GeneralSpline (SEXP Y_R, SEXP T_R, SEXP X_R, SEXP Z_R, SEXP 
 	const MapVecd T(as<MapVecd>(T_R));
 	const MapMatd X(as<MapMatd>(X_R));
 	const MapMatd Z(as<MapMatd>(Z_R));
-	const int ZT = IntegerVector(ZT_R)[0];
+	const MapVeci ZT_colid(as<MapVeci>(ZT_colid_R));
 	const MapMatd Bspline(as<MapMatd>(Bspline_R));
 	const MapMati index_obs(as<MapMati>(index_obs_R));
 	const MapVecd coef_initial(as<MapVecd>(coef_initial_R));
@@ -389,13 +389,22 @@ RcppExport SEXP LMM_GeneralSpline (SEXP Y_R, SEXP T_R, SEXP X_R, SEXP Z_R, SEXP 
 	const int nXT = nT+1;
 	const int nZT = nXT+X_nc;
 	int ncov = nZT;
-	if (ZT)
-	{		
-		ncov += Z_nc;
+	bool ZT_flag = false;
+	int ZT_nc = 0;
+	MatrixXd ZT;
+	if (ZT_colid(0) != -1)
+	{
+		ZT_flag = true;
+		ZT_nc = ZT_colid.size();
+		ncov += ZT_nc;
+		ZT.resize(n, ZT_nc);
+		for (int k=0; k<ZT_nc; k++) {
+			ZT.col(k) = Z.col(ZT_colid(k));
+		}
 	}	
 	const int s = Bspline.cols(); // number of B-spline functions
 	/**** some useful constants ********************************************************************************************************************/
-	/*#############################################################################################################################################*/	
+	/*#############################################################################################################################################*/
 	
 
 	
@@ -501,7 +510,7 @@ RcppExport SEXP LMM_GeneralSpline (SEXP Y_R, SEXP T_R, SEXP X_R, SEXP Z_R, SEXP 
 	VectorXd X_uni_theta(m);
 	VectorXd TX_uni_theta(m);
 	VectorXd TZ_theta;
-	if (ZT)
+	if (ZT_flag)
 	{
 		TZ_theta.resize(n);
 	}
@@ -541,9 +550,9 @@ RcppExport SEXP LMM_GeneralSpline (SEXP Y_R, SEXP T_R, SEXP X_R, SEXP Z_R, SEXP 
 	X_uni_theta = X_uni*theta.segment(1, X_nc);
 	Z_theta = Z*theta.segment(nZ, Z_nc);
 	TX_uni_theta = X_uni*theta.segment(nXT, X_nc);
-	if (ZT)
+	if (ZT_flag)
 	{
-		TZ_theta = Z*theta.tail(Z_nc);
+		TZ_theta = ZT*theta.tail(ZT_nc);
 	}	
 	for (int i=0; i<n_minus_n2; i++) 
 	{
@@ -552,7 +561,7 @@ RcppExport SEXP LMM_GeneralSpline (SEXP Y_R, SEXP T_R, SEXP X_R, SEXP Z_R, SEXP 
 		resi.block(idxx, 0, index_obs(idx,1), 1) = Y.segment(index_obs(idx,0), index_obs(idx,1));
 		resi.block(idxx, 0, index_obs(idx,1), 1).array() -= theta(0)+Z_theta(idx);
 		resi.block(idxx, 0, index_obs(idx,1), 1).noalias() -= T.segment(index_obs(idx,0), index_obs(idx,1))*theta(nT);
-		if (ZT)
+		if (ZT_flag)
 		{
 			resi.block(idxx, 0, index_obs(idx,1), 1).noalias() -= T.segment(index_obs(idx,0), index_obs(idx,1))*TZ_theta(idx);
 		}
@@ -666,16 +675,16 @@ RcppExport SEXP LMM_GeneralSpline (SEXP Y_R, SEXP T_R, SEXP X_R, SEXP Z_R, SEXP 
 			XinvVY(nT) += V_inv_TY;
 			XinvVY.segment(nXT, X_nc).noalias() += V_inv_TY*X.row(i).transpose();
 			
-			if (ZT)
+			if (ZT_flag)
 			{
-				XinvVX.block(0, nZT, 1, Z_nc).noalias() += V_inv_1T(i)*Z.row(i);
-				XinvVX.block(1, nZT, X_nc, Z_nc).noalias() += V_inv_1T(i)*X.row(i).transpose()*Z.row(i);
-				XinvVX.block(nZ, nZT, Z_nc, Z_nc).noalias() += V_inv_1T(i)*Z.row(i).transpose()*Z.row(i);
-				XinvVX.block(nT, nZT, 1, Z_nc).noalias() += V_inv_TT(i)*Z.row(i);
-				XinvVX.block(nXT, nZT, X_nc, Z_nc).noalias() += V_inv_TT(i)*X.row(i).transpose()*Z.row(i);
-				XinvVX.block(nZT, nZT, Z_nc, Z_nc).noalias() += V_inv_TT(i)*Z.row(i).transpose()*Z.row(i);
+				XinvVX.block(0, nZT, 1, ZT_nc).noalias() += V_inv_1T(i)*ZT.row(i);
+				XinvVX.block(1, nZT, X_nc, ZT_nc).noalias() += V_inv_1T(i)*X.row(i).transpose()*ZT.row(i);
+				XinvVX.block(nZ, nZT, Z_nc, ZT_nc).noalias() += V_inv_1T(i)*Z.row(i).transpose()*ZT.row(i);
+				XinvVX.block(nT, nZT, 1, ZT_nc).noalias() += V_inv_TT(i)*ZT.row(i);
+				XinvVX.block(nXT, nZT, X_nc, ZT_nc).noalias() += V_inv_TT(i)*X.row(i).transpose()*ZT.row(i);
+				XinvVX.block(nZT, nZT, ZT_nc, ZT_nc).noalias() += V_inv_TT(i)*ZT.row(i).transpose()*ZT.row(i);
 				
-				XinvVY.segment(nZT, Z_nc).noalias() += V_inv_TY*Z.row(i).transpose();
+				XinvVY.segment(nZT, ZT_nc).noalias() += V_inv_TY*ZT.row(i).transpose();
 			}
 		}
 
@@ -702,14 +711,14 @@ RcppExport SEXP LMM_GeneralSpline (SEXP Y_R, SEXP T_R, SEXP X_R, SEXP Z_R, SEXP 
 			XinvVY.segment(nZ, Z_nc).noalias() += V_inv_1Y*Z.row(idx).transpose();
 			XinvVY(nT) += V_inv_TY;
 			
-			if (ZT) 
+			if (ZT_flag) 
 			{
-				XinvVX.block(0, nZT, 1, Z_nc).noalias() += V_inv_1T(idx)*Z.row(idx);
-				XinvVX.block(nZ, nZT, Z_nc, Z_nc).noalias() += V_inv_1T(idx)*Z.row(idx).transpose()*Z.row(idx);
-				XinvVX.block(nT, nZT, 1, Z_nc).noalias() += V_inv_TT(idx)*Z.row(idx);
-				XinvVX.block(nZT, nZT, Z_nc, Z_nc).noalias() += V_inv_TT(idx)*Z.row(idx).transpose()*Z.row(idx);
+				XinvVX.block(0, nZT, 1, ZT_nc).noalias() += V_inv_1T(idx)*ZT.row(idx);
+				XinvVX.block(nZ, nZT, Z_nc, ZT_nc).noalias() += V_inv_1T(idx)*Z.row(idx).transpose()*ZT.row(idx);
+				XinvVX.block(nT, nZT, 1, ZT_nc).noalias() += V_inv_TT(idx)*ZT.row(idx);
+				XinvVX.block(nZT, nZT, ZT_nc, ZT_nc).noalias() += V_inv_TT(idx)*ZT.row(idx).transpose()*ZT.row(idx);
 				
-				XinvVY.segment(nZT, Z_nc).noalias() += V_inv_TY*Z.row(idx).transpose();
+				XinvVY.segment(nZT, ZT_nc).noalias() += V_inv_TY*ZT.row(idx).transpose();
 			}
 			
 			for (int k=0; k<m; k++) 
@@ -727,10 +736,10 @@ RcppExport SEXP LMM_GeneralSpline (SEXP Y_R, SEXP T_R, SEXP X_R, SEXP Z_R, SEXP 
 				XinvVY.segment(1, X_nc).noalias() += q(i,k)*V_inv_1Y*X_uni.row(k).transpose();				
 				XinvVY.segment(nXT, X_nc).noalias() += q(i,k)*V_inv_TY*X_uni.row(k).transpose();
 
-				if (ZT)
+				if (ZT_flag)
 				{
-					XinvVX.block(1, nZT, X_nc, Z_nc).noalias() += q(i,k)*V_inv_1T(idx)*X_uni.row(k).transpose()*Z.row(idx);
-					XinvVX.block(nXT, nZT, X_nc, Z_nc).noalias() += q(i,k)*V_inv_TT(idx)*X_uni.row(k).transpose()*Z.row(idx);
+					XinvVX.block(1, nZT, X_nc, ZT_nc).noalias() += q(i,k)*V_inv_1T(idx)*X_uni.row(k).transpose()*ZT.row(idx);
+					XinvVX.block(nXT, nZT, X_nc, ZT_nc).noalias() += q(i,k)*V_inv_TT(idx)*X_uni.row(k).transpose()*ZT.row(idx);
 				}
 			}
 		}
@@ -742,9 +751,9 @@ RcppExport SEXP LMM_GeneralSpline (SEXP Y_R, SEXP T_R, SEXP X_R, SEXP Z_R, SEXP 
 		X_uni_theta = X_uni*theta.segment(1, X_nc);
 		Z_theta = Z*theta.segment(nZ, Z_nc);
 		TX_uni_theta = X_uni*theta.segment(nXT, X_nc);
-		if (ZT)
+		if (ZT_flag)
 		{
-			TZ_theta = Z*theta.tail(Z_nc);
+			TZ_theta = ZT*theta.tail(ZT_nc);
 		}	
 		for (int i=0; i<n2; i++)
 		{
@@ -752,7 +761,7 @@ RcppExport SEXP LMM_GeneralSpline (SEXP Y_R, SEXP T_R, SEXP X_R, SEXP Z_R, SEXP 
 			resi2.segment(index_obs(i,0), index_obs(i,1)).array() -= theta(0)+X_uni_theta(X_uni_ind(i))+Z_theta(i);
 			resi2.segment(index_obs(i,0), index_obs(i,1)).noalias() -= T.segment(index_obs(i,0), index_obs(i,1))*theta(nT);
 			resi2.segment(index_obs(i,0), index_obs(i,1)).noalias() -= T.segment(index_obs(i,0), index_obs(i,1))*TX_uni_theta(X_uni_ind(i));
-			if (ZT)
+			if (ZT_flag)
 			{
 				resi2.segment(index_obs(i,0), index_obs(i,1)).noalias() -= T.segment(index_obs(i,0), index_obs(i,1))*TZ_theta(i);
 			}
@@ -764,7 +773,7 @@ RcppExport SEXP LMM_GeneralSpline (SEXP Y_R, SEXP T_R, SEXP X_R, SEXP Z_R, SEXP 
 			resi.block(idxx, 0, index_obs(idx,1), 1) = Y.segment(index_obs(idx,0), index_obs(idx,1));
 			resi.block(idxx, 0, index_obs(idx,1), 1).array() -= theta(0)+Z_theta(idx);
 			resi.block(idxx, 0, index_obs(idx,1), 1).noalias() -= T.segment(index_obs(idx,0), index_obs(idx,1))*theta(nT);
-			if (ZT)
+			if (ZT_flag)
 			{
 				resi.block(idxx, 0, index_obs(idx,1), 1).noalias() -= T.segment(index_obs(idx,0), index_obs(idx,1))*TZ_theta(idx);
 			}
@@ -895,7 +904,7 @@ RcppExport SEXP LMM_GeneralSpline (SEXP Y_R, SEXP T_R, SEXP X_R, SEXP Z_R, SEXP 
 	}
 	/**** EM algorithm *****************************************************************************************************************************/
 	/*#############################################################################################################################################*/
-	
+
 	
 	
 	/*#############################################################################################################################################*/
@@ -925,7 +934,7 @@ RcppExport SEXP LMM_GeneralSpline (SEXP Y_R, SEXP T_R, SEXP X_R, SEXP Z_R, SEXP 
 		
 		loglik = LMM_GeneralSplineProfile(pB, p_col_sum, q_row_sum, vcparams, vcparams0, p, p0, P_theta, q, logp, Z_theta, X_uni_theta, TX_uni_theta, resi2, resi, 
 			D, V, V_inv, V_inv_1, V_inv_T, V_inv_11, V_inv_1T, V_inv_TT, L_var, I_var, TZ_theta, theta, vc_initial, Y, T, U, index_obs, Bspline_uni, Z, X_uni, X_uni_ind, 
-			Bspline_uni_ind, p_static, n, n2, m, s, n_minus_n2, nobs, nobs2, X_nc, Z_nc, nT, MAX_ITER, TOL, nZ, nXT, ZT);
+			Bspline_uni_ind, p_static, n, n2, m, s, n_minus_n2, nobs, nobs2, X_nc, Z_nc, nT, MAX_ITER, TOL, nZ, nXT, ZT_flag, ZT_nc, ZT);
 		if (loglik == -999.) 
 		{
 			flag_nonconvergence_cov = true;
@@ -944,7 +953,7 @@ RcppExport SEXP LMM_GeneralSpline (SEXP Y_R, SEXP T_R, SEXP X_R, SEXP Z_R, SEXP 
 			theta0(i) += hn;
 			profile_vec(i) = LMM_GeneralSplineProfile(pB, p_col_sum, q_row_sum, vcparams, vcparams0, p, p0, P_theta, q, logp, Z_theta, X_uni_theta, TX_uni_theta, resi2, resi, 
 				D, V, V_inv, V_inv_1, V_inv_T, V_inv_11, V_inv_1T, V_inv_TT, L_var, I_var, TZ_theta, theta0, vc_initial, Y, T, U, index_obs, Bspline_uni, Z, X_uni, X_uni_ind, 
-				Bspline_uni_ind, p_static, n, n2, m, s, n_minus_n2, nobs, nobs2, X_nc, Z_nc, nT, MAX_ITER, TOL, nZ, nXT, ZT);
+				Bspline_uni_ind, p_static, n, n2, m, s, n_minus_n2, nobs, nobs2, X_nc, Z_nc, nT, MAX_ITER, TOL, nZ, nXT, ZT_flag, ZT_nc, ZT);
 			if(profile_vec(i) == -999.) 
 			{
 				flag_nonconvergence_cov = true;
@@ -960,7 +969,7 @@ RcppExport SEXP LMM_GeneralSpline (SEXP Y_R, SEXP T_R, SEXP X_R, SEXP Z_R, SEXP 
 				theta0(j) += hn;
 				loglik = LMM_GeneralSplineProfile(pB, p_col_sum, q_row_sum, vcparams, vcparams0, p, p0, P_theta, q, logp, Z_theta, X_uni_theta, TX_uni_theta, resi2, resi, 
 					D, V, V_inv, V_inv_1, V_inv_T, V_inv_11, V_inv_1T, V_inv_TT, L_var, I_var, TZ_theta, theta0, vc_initial, Y, T, U, index_obs, Bspline_uni, Z, X_uni, X_uni_ind, 
-					Bspline_uni_ind, p_static, n, n2, m, s, n_minus_n2, nobs, nobs2, X_nc, Z_nc, nT, MAX_ITER, TOL, nZ, nXT, ZT);
+					Bspline_uni_ind, p_static, n, n2, m, s, n_minus_n2, nobs, nobs2, X_nc, Z_nc, nT, MAX_ITER, TOL, nZ, nXT, ZT_flag, ZT_nc, ZT);
 				if (loglik == -999.) 
 				{
 					flag_nonconvergence_cov = true;
