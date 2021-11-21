@@ -4,9 +4,20 @@
 \alias{smle}
 \title{Performs efficient semiparametric estimation for regression models with univariate outcomes under general two-phase designs.}
 \usage{
-smle(Y = NULL, Delta = NULL, X = NULL, Z = NULL, Bspline_Z = NULL,
-  data = NULL, hn_scale = 1, MAX_ITER = 2000, TOL = 1e-04,
-  noSE = FALSE, model = "linear", verbose = FALSE)
+smle(
+  Y = NULL,
+  Delta = NULL,
+  X = NULL,
+  Z = NULL,
+  Bspline_Z = NULL,
+  data = NULL,
+  hn_scale = 1,
+  MAX_ITER = 2000,
+  TOL = 1e-04,
+  noSE = FALSE,
+  model = "linear",
+  verbose = FALSE
+)
 }
 \arguments{
 \item{Y}{Specifies the column of the continuous, binary (\eqn{0} or \eqn{1}), or censored outcome. Subjects with missing values of \code{Y} are omitted from the analysis. This argument is required.}

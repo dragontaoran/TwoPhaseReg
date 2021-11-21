@@ -4,10 +4,23 @@
 \alias{smle_lmm}
 \title{Performs efficient semiparametric estimation for linear mixed models with longitudinal continuous outcomes under general two-phase designs.}
 \usage{
-smle_lmm(Y = NULL, Time = NULL, ID = NULL, X = NULL, Z = NULL,
-  ZT = FALSE, Bspline_Z = NULL, data = NULL, hn_scale = 1,
-  MAX_ITER = 2000, TOL = 1e-04, noSE = FALSE, verbose = FALSE,
-  coef_initial = NULL, vc_initial = NULL)
+smle_lmm(
+  Y = NULL,
+  Time = NULL,
+  ID = NULL,
+  X = NULL,
+  Z = NULL,
+  ZT = NULL,
+  Bspline_Z = NULL,
+  data = NULL,
+  hn_scale = 1,
+  MAX_ITER = 2000,
+  TOL = 1e-04,
+  noSE = FALSE,
+  verbose = FALSE,
+  coef_initial = NULL,
+  vc_initial = NULL
+)
 }
 \arguments{
 \item{Y}{Specifies the column of the longitudinal continuous outcome. Observations with missing values of \code{Y} are omitted from the analysis. This argument is required.}
@@ -20,7 +33,7 @@ smle_lmm(Y = NULL, Time = NULL, ID = NULL, X = NULL, Z = NULL,
 
 \item{Z}{Specifies the columns of the inexpensive covariates. \code{Z} should be time-invariant. Subjects with missing values of \code{Z} are omitted from the analysis. This argument is optional.}
 
-\item{ZT}{If \code{TRUE}, then include the interaction term between \code{Z} and \code{Time} as fixed effects. The default value is \code{FALSE}.}
+\item{ZT}{Specifies the columns of the inexpensive covariates that have time-by-covariate interaction effects. \code{ZT} should be a subset of \code{Z}. Subjects with missing values of \code{ZT} are omitted from the analysis. This argument is optional.}
 
 \item{Bspline_Z}{Specifies the columns of the B-spline basis. Subjects with missing values of \code{Bspline_Z} are omitted from the analysis. This argument is not needed when \code{X} is independent of \code{Z}.}
 
@@ -36,7 +49,7 @@ smle_lmm(Y = NULL, Time = NULL, ID = NULL, X = NULL, Z = NULL,
 
 \item{verbose}{If \code{TRUE}, then show details of the analysis. The default value is \code{FALSE}.}
 
-\item{coef_initial}{Specifies the initial values of the fixed effects. \code{coef_initial} should be a numerical vector. The elements of \code{coef_initial} should follow the order of expensive covariates, intercept, inexpensive covariates (if any), time, and interactions between expensive covariates and time. This argument is optional. If this argument is not specified, then the maximum likelihood estimates from the null model without the expensive covariates will be used as initial values.}
+\item{coef_initial}{Specifies the initial values of the fixed effects. \code{coef_initial} should be a numerical vector. The elements of \code{coef_initial} should follow the order of intercept, expensive covariates, inexpensive covariates (if any), time, interactions between expensive covariates and time, and interactions between inexpensive covariates and time (if any). This argument is optional. If this argument is not specified, then the maximum likelihood estimates from the null model without the expensive covariates will be used as initial values.}
 
 \item{vc_initial}{Specifies the initial values of the variance component parameters. \code{vc_initial} should be a numerical vector of length \code{4}. The elements of \code{vc_initial} should follow the order of variance of random intercept, covariance between random intercept and random slope of time, variance of random slope of time, and variance of the residual error term. This argument is optional. If this argument is not specified, then the maximum likelihood estimates from the null model without the expensive covariates will be used as initial values.}
 }
