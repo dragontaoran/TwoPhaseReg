@@ -154,7 +154,7 @@ smle_MEXY <- function (Y_unval=NULL, Y=NULL, X_unval=NULL, X=NULL, Z=NULL, Bspli
 	
 	###############################################################################################################
 	#### analysis #################################################################################################
-	res = .Call("TwoPhase_MLE0_MEXY", Y_unval_vec, X_unval_0mat, Y_vec, X_mat, Z_mat, Bspline_mat, hn, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
+	res = .Call("TwoPhase_MLE0_MEXY", Y_unval_vec, X_unval_mat, Y_vec, X_mat, Z_mat, Bspline_mat, hn, MAX_ITER, TOL, noSE, package="TwoPhaseReg")
   #### analysis #################################################################################################
 	###############################################################################################################
 	
